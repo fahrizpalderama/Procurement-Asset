@@ -26,16 +26,17 @@ export default function Login() {
       console.error("Auth error", error);
       const data = error.response?.data || {};
       const details = data.details || "";
+      const hint = data.hint || "";
       const requiredUrl = data.required_callback_url || "URL aplikasi Anda/auth/callback";
       
       let msg = "Gagal menghubungi server autentikasi.";
-      if (details.includes("Missing GOOGLE_CLIENT_ID")) {
-        msg = "GOOGLE_CLIENT_ID atau GOOGLE_CLIENT_SECRET belum diatur di Settings > Secrets.";
+      if (details.includes("GOOGLE_CLIENT_ID belum diatur")) {
+        msg = details;
       } else if (error.response?.status === 500) {
         msg = `Kesalahan Konfigurasi Server (500). Detail: ${details}`;
       }
 
-      alert(`Login Error: ${msg}\n\nLangkah Perbaikan Penting:\n1. Buka Google Cloud Console.\n2. Tambahkan URL berikut ke bagian "Authorized redirect URIs":\n\n${requiredUrl}\n\n3. Jika ada APP_URL di Settings > Secrets, harap HAPUS agar aplikasi dapat mendeteksi URL secara otomatis.`);
+      alert(`Login Error: ${msg}\n\n${hint ? `Hint: ${hint}\n\n` : ""}Langkah Perbaikan Penting:\n1. Buka Google Cloud Console.\n2. Tambahkan URL berikut ke bagian "Authorized redirect URIs":\n\n${requiredUrl}\n\n3. Jika ada APP_URL di Settings > Secrets, harap HAPUS agar aplikasi dapat mendeteksi URL secara otomatis.`);
       setLoading(false);
     }
   };

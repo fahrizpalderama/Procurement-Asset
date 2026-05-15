@@ -193,13 +193,19 @@ async function ensureSheetExists(sheets: any, spreadsheetId: string, sheetName: 
 app.get("/api/auth/url", (req, res) => {
   const dynamicCallbackUrl = getCallbackUrl(req);
   try {
-    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-      throw new Error("Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET");
+    const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
+
+    if (!clientId || clientId === "YOUR_CLIENT_ID" || clientId === "") {
+      throw new Error("GOOGLE_CLIENT_ID belum diatur atau masih menggunakan placeholder di Settings > Secrets.");
+    }
+    if (!clientSecret || clientSecret === "YOUR_CLIENT_SECRET" || clientSecret === "") {
+      throw new Error("GOOGLE_CLIENT_SECRET belum diatur atau masih menggunakan placeholder di Settings > Secrets.");
     }
     
     const dynamicClient = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
+      clientId,
+      clientSecret,
       dynamicCallbackUrl
     );
 
@@ -217,7 +223,7 @@ app.get("/api/auth/url", (req, res) => {
       error: "Authentication Configuration Error", 
       details: error.message,
       required_callback_url: dynamicCallbackUrl,
-      hint: "Pastikan GOOGLE_CLIENT_ID dan GOOGLE_CLIENT_SECRET sudah benar di Settings > Secrets."
+      hint: "Buka menu Settings (ikon roda gigi) > Secrets di kiri bawah, lalu masukkan GOOGLE_CLIENT_ID dan GOOGLE_CLIENT_SECRET yang valid."
     });
   }
 });
