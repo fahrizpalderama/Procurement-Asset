@@ -6,6 +6,7 @@ import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import multer from "multer";
 import fs from "fs";
+import os from "os";
 
 dotenv.config();
 
@@ -15,7 +16,12 @@ const PORT = 3000;
 app.use(express.json());
 app.use(cookieParser());
 
-const upload = multer({ dest: "uploads/" });
+// In production (Vercel), only /tmp is writable.
+const uploadDir = process.env.VERCEL ? path.join(os.tmpdir(), "uploads") : "uploads";
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+const upload = multer({ dest: uploadDir });
 
 const getAppUrl = (req?: express.Request) => {
   // If user explicitly set APP_URL in secrets, use it. 
@@ -44,14 +50,15 @@ const getCallbackUrl = (req?: express.Request) => {
 
 // oauth2Client initialized as a base template, dynamic clients used in routes
 const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
+  (process.env.GOOGLE_CLIENT_ID || "").trim(),
+  (process.env.GOOGLE_CLIENT_SECRET || "").trim(),
   "http://localhost:3000/auth/callback" // Placeholder, dynamic callback used
 );
 
-console.log("Auth System Initialized:");
-console.log("- GOOGLE_CLIENT_ID:", process.env.GOOGLE_CLIENT_ID ? "PRESENT" : "MISSING");
-console.log("- GOOGLE_CLIENT_SECRET:", process.env.GOOGLE_CLIENT_SECRET ? "PRESENT" : "MISSING");
+console.log("Auth System Initialized (Production Check):");
+console.log("- GOOGLE_CLIENT_ID:", process.env.GOOGLE_CLIENT_ID ? `SET (${process.env.GOOGLE_CLIENT_ID.substring(0, 10)}...)` : "MISSING");
+console.log("- GOOGLE_CLIENT_SECRET:", process.env.GOOGLE_CLIENT_SECRET ? "SET" : "MISSING");
+console.log("- MASTER_SPREADSHEET_ID:", process.env.MASTER_SPREADSHEET_ID ? "SET" : "MISSING (Recommendation: Set in Vercel Env)");
 console.log("- Base APP_URL:", getAppUrl());
 function logAuthInit(req: express.Request) {
   console.log("Current Request Context Auth URI:", getCallbackUrl(req));
@@ -193,14 +200,14 @@ async function ensureSheetExists(sheets: any, spreadsheetId: string, sheetName: 
 app.get("/api/auth/url", (req, res) => {
   const dynamicCallbackUrl = getCallbackUrl(req);
   try {
-    const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
+    const clientId = (process.env.GOOGLE_CLIENT_ID || "").trim();
+    const clientSecret = (process.env.GOOGLE_CLIENT_SECRET || "").trim();
 
-    if (!clientId || clientId === "YOUR_CLIENT_ID" || clientId === "") {
-      throw new Error("GOOGLE_CLIENT_ID belum diatur atau masih menggunakan placeholder di Settings > Secrets.");
+    if (!clientId || clientId.length < 10 || clientId.startsWith("YOUR_")) {
+      throw new Error(`GOOGLE_CLIENT_ID tidak ditemukan atau tidak valid. Pastikan sudah diatur di Vercel Environment Variables. (Nilai terdeteksi: ${clientId ? "Tersedia tapi mungkin salah" : "KOSONG"})`);
     }
-    if (!clientSecret || clientSecret === "YOUR_CLIENT_SECRET" || clientSecret === "") {
-      throw new Error("GOOGLE_CLIENT_SECRET belum diatur atau masih menggunakan placeholder di Settings > Secrets.");
+    if (!clientSecret || clientSecret.length < 5 || clientSecret.startsWith("YOUR_")) {
+      throw new Error(`GOOGLE_CLIENT_SECRET tidak ditemukan atau tidak valid. (Nilai terdeteksi: ${clientSecret ? "Tersedia" : "KOSONG"})`);
     }
     
     const dynamicClient = new google.auth.OAuth2(
@@ -250,8 +257,8 @@ app.get(["/auth/callback", "/auth/callback/"], async (req, res) => {
     console.log("Attempting to exchange code for tokens...");
     
     const exchangeClient = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
+      (process.env.GOOGLE_CLIENT_ID || "").trim(),
+      (process.env.GOOGLE_CLIENT_SECRET || "").trim(),
       dynamicCallbackUrl
     );
 
