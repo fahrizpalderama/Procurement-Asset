@@ -230,7 +230,7 @@ app.get("/api/auth/url", (req, res) => {
       error: "Authentication Configuration Error", 
       details: error.message,
       required_callback_url: dynamicCallbackUrl,
-      hint: "Buka menu Settings (ikon roda gigi) > Secrets di kiri bawah, lalu masukkan GOOGLE_CLIENT_ID dan GOOGLE_CLIENT_SECRET yang valid."
+      hint: "Pastikan GOOGLE_CLIENT_ID dan GOOGLE_CLIENT_SECRET sudah diatur di Settings > Secrets (AI Studio) atau Environment Variables (Vercel)."
     });
   }
 });
@@ -965,10 +965,14 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
+    if (fs.existsSync(distPath)) {
+      app.use(express.static(distPath));
+      app.get("*", (req, res) => {
+        res.sendFile(path.join(distPath, "index.html"));
+      });
+    } else {
+      console.warn("Production: 'dist' folder not found. Only API routes will be available.");
+    }
   }
 
   // Only listen if not on Vercel
