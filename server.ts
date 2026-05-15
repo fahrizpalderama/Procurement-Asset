@@ -391,6 +391,38 @@ app.get(["/auth/callback", "/auth/callback/"], async (req, res) => {
   }
 });
 
+async function getUserRole(auth: any): Promise<'ADMIN' | 'USER' | 'UNAUTHORIZED'> {
+  const oauth2 = google.oauth2({ version: "v2", auth });
+  const userInfo = await oauth2.userinfo.get();
+  const email = userInfo.data.email;
+  
+  if (!email) return 'UNAUTHORIZED';
+  
+  const userEmail = email.toLowerCase().trim();
+  const adminEmail = ADMIN_EMAIL.toLowerCase().trim();
+  
+  if (userEmail === adminEmail) return 'ADMIN';
+  
+  try {
+    const masterId = await getOrCreateMasterSpreadsheet(auth);
+    if (masterId) {
+      const sheets = google.sheets({ version: "v4", auth });
+      const usersResp = await sheets.spreadsheets.values.get({
+        spreadsheetId: masterId,
+        range: "Users!A2:A100",
+      });
+      const allowedEmails = (usersResp.data.values || []).flat().map(e => String(e).toLowerCase().trim());
+      if (allowedEmails.includes(userEmail)) {
+        return 'USER';
+      }
+    }
+  } catch (e) {
+    console.error("Error checking user role:", e);
+  }
+  
+  return 'UNAUTHORIZED';
+}
+
 app.get("/api/auth/status", async (req, res) => {
   const tokensStr = req.cookies.google_tokens;
   if (!tokensStr) {
@@ -404,40 +436,7 @@ app.get("/api/auth/status", async (req, res) => {
     const oauth2 = google.oauth2({ version: "v2", auth });
     const userInfo = await oauth2.userinfo.get();
     
-    const email = userInfo.data.email;
-    if (!email) {
-      console.error("Auth Status Check: Email missing in userinfo");
-      throw new Error("Email not found");
-    }
-
-    console.log("Auth Status Check: Success for", email);
-
-    let role: 'ADMIN' | 'USER' | 'UNAUTHORIZED' = 'UNAUTHORIZED';
-
-    const userEmail = email.toLowerCase().trim();
-    const adminEmail = ADMIN_EMAIL.toLowerCase().trim();
-
-    if (userEmail === adminEmail) {
-      role = 'ADMIN';
-    } else {
-      // Check in Users sheet of Master Spreadsheet
-      try {
-        const masterId = await getOrCreateMasterSpreadsheet(auth);
-        if (masterId) {
-          const sheets = google.sheets({ version: "v4", auth });
-          const usersResp = await sheets.spreadsheets.values.get({
-            spreadsheetId: masterId,
-            range: "Users!A2:A100",
-          });
-          const allowedEmails = (usersResp.data.values || []).flat().map(e => String(e).toLowerCase().trim());
-          if (allowedEmails.includes(userEmail)) {
-            role = 'USER';
-          }
-        }
-      } catch (e) {
-        console.error("Error checking user role:", e);
-      }
-    }
+    const role = await getUserRole(auth);
 
     res.json({ 
       isAuthenticated: true, 
@@ -668,6 +667,20 @@ app.post("/api/sheets/update", async (req, res) => {
       const tokens = JSON.parse(tokensStr);
       const auth = getAuthorizedClient(tokens, req);
       const sheets = google.sheets({ version: "v4", auth });
+
+      const role = await getUserRole(auth);
+      
+      // If role is USER, check current status first
+      if (role === 'USER') {
+        const currentData = await sheets.spreadsheets.values.get({
+          spreadsheetId,
+          range: `Procurement!N${rowIndex}:N${rowIndex}`,
+        });
+        const currentStatus = (currentData.data.values?.[0]?.[0] || "PENDING");
+        if (currentStatus !== 'PENDING' && currentStatus !== '') {
+          return res.status(403).json({ error: "Data sudah terverifikasi dan tidak dapat diubah oleh User." });
+        }
+      }
   
       await sheets.spreadsheets.values.update({
         spreadsheetId,
@@ -887,6 +900,21 @@ app.post("/api/sheets/delete", async (req, res) => {
     const tokens = JSON.parse(tokensStr);
     const auth = getAuthorizedClient(tokens, req);
     const sheets = google.sheets({ version: "v4", auth });
+
+    const role = await getUserRole(auth);
+
+    // Security check for User
+    if (role === 'USER') {
+      const currentData = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `Procurement!N${rowIndex}:N${rowIndex}`,
+      });
+      const currentStatus = (currentData.data.values?.[0]?.[0] || "PENDING");
+      if (currentStatus !== 'PENDING' && currentStatus !== '') {
+        return res.status(403).json({ error: "Data sudah terverifikasi dan tidak dapat dihapus oleh User." });
+      }
+    }
+
     const drive = google.drive({ version: "v3", auth });
 
     // 1. Delete photo from Drive if exists

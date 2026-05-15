@@ -365,69 +365,70 @@ export default function Dashboard({ authStatus }: DashboardProps) {
   return (
     <div className="h-screen flex flex-col bg-slate-50 text-zinc-900 font-sans overflow-hidden">
       {/* Header Section */}
-      <header className="h-20 flex items-center justify-between px-8 bg-white border-b border-zinc-100 shrink-0">
-        <div className="flex items-center gap-10">
-          <div className="flex items-center gap-3 group cursor-pointer" onClick={() => setActiveMainTab("dashboard")}>
-            <div className="bg-black p-2.5 rounded-xl shadow-lg shadow-black/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <div className="relative w-5 h-5 flex items-center justify-center">
-                <div className="absolute left-0 top-0 w-1 h-3 bg-white rounded-full"></div>
-                <div className="absolute left-1.5 top-0 w-1 h-3 bg-white rounded-full"></div>
-                <div className="absolute w-6 h-1 bg-white rounded-full rotate-[135deg]"></div>
-                <div className="absolute right-0 bottom-0 w-1 h-3 bg-white rounded-full"></div>
-                <div className="absolute right-1.5 bottom-0 w-1 h-3 bg-white rounded-full"></div>
+      <header className="h-auto min-h-[5rem] flex flex-col md:flex-row items-stretch md:items-center justify-between px-4 sm:px-8 bg-white border-b border-zinc-100 shrink-0 gap-4 py-4 md:py-0">
+        <div className="flex items-center justify-between md:justify-start gap-6 lg:gap-10">
+          <div className="flex items-center gap-2 sm:gap-3 group cursor-pointer" onClick={() => setActiveMainTab("dashboard")}>
+            <div className="bg-black p-2 sm:p-2.5 rounded-xl shadow-lg shadow-black/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <div className="relative w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center">
+                <div className="absolute left-0 top-0 w-0.5 sm:w-1 h-2 sm:h-3 bg-white rounded-full"></div>
+                <div className="absolute left-1 sm:left-1.5 top-0 w-0.5 sm:w-1 h-2 sm:h-3 bg-white rounded-full"></div>
+                <div className="absolute w-5 sm:w-6 h-0.5 sm:h-1 bg-white rounded-full rotate-[135deg]"></div>
+                <div className="absolute right-0 bottom-0 w-0.5 sm:w-1 h-2 sm:h-3 bg-white rounded-full"></div>
+                <div className="absolute right-1 sm:right-1.5 bottom-0 w-0.5 sm:w-1 h-2 sm:h-3 bg-white rounded-full"></div>
               </div>
             </div>
             <div className="flex flex-col">
-              <h1 className="text-xl font-display font-black tracking-tighter leading-none uppercase">
+              <h1 className="text-lg sm:text-xl font-display font-black tracking-tighter leading-none uppercase">
                 SEBELAS<span className="text-zinc-400">.FORM</span>
               </h1>
-              <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-400 mt-0.5">Procurement System</span>
+              <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-400 mt-0.5">Procurement System</span>
             </div>
           </div>
           
-          <nav className="hidden lg:flex items-center gap-2 bg-zinc-50 p-1 rounded-2xl">
+          <nav className="flex items-center gap-1 sm:gap-2 bg-zinc-50 p-1 rounded-2xl overflow-x-auto no-scrollbar max-w-[200px] sm:max-w-none">
             <button 
               onClick={() => {
                 setActiveMainTab("dashboard");
                 setActiveTab("inventaris");
               }}
-              className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${activeMainTab === "dashboard" ? "bg-white shadow-sm border border-zinc-100 text-black" : "text-zinc-400 hover:text-black"}`}
+              className={`px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${activeMainTab === "dashboard" ? "bg-white shadow-sm border border-zinc-100 text-black" : "text-zinc-400 hover:text-black"}`}
             >
-              <FileSpreadsheet className="w-3.5 h-3.5" />
-              Dashboard
+              <FileSpreadsheet className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
+              <span className="hidden sm:inline">Dashboard</span>
+              <span className="sm:hidden">Dash</span>
             </button>
             {authStatus.role === 'ADMIN' && (
               <button 
                 onClick={() => setActiveMainTab("accounts")}
-                className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${activeMainTab === "accounts" ? "bg-white shadow-sm border border-zinc-100 text-black" : "text-zinc-400 hover:text-black"}`}
+                className={`px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${activeMainTab === "accounts" ? "bg-white shadow-sm border border-zinc-100 text-black" : "text-zinc-400 hover:text-black"}`}
               >
-                <Plus className="w-3.5 h-3.5" />
-                Manajemen Akun
+                <Plus className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
+                Akun
               </button>
             )}
           </nav>
         </div>
         
-        <div className="flex items-center gap-6">
-          <div className="hidden sm:flex items-center gap-3 bg-zinc-50 px-4 py-2 rounded-2xl border border-zinc-100">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            <span className="text-[11px] font-bold text-zinc-500">Database Terhubung</span>
+        <div className="flex items-center justify-between md:justify-end gap-4 sm:gap-6">
+          <div className="flex items-center gap-2 sm:gap-3 bg-zinc-50 px-3 sm:px-4 py-1.5 sm:py-2 rounded-2xl border border-zinc-100">
+            <div className="w-1.5 sm:w-2 h-1.5 sm:h-2 bg-green-500 rounded-full animate-pulse" />
+            <span className="text-[9px] sm:text-[11px] font-bold text-zinc-500">Aktif</span>
           </div>
           
           <div className="flex items-center gap-2">
             <button 
               onClick={fetchData}
-              className="p-3 bg-zinc-50 hover:bg-zinc-100 rounded-2xl transition-all border border-zinc-100 group"
+              className="p-2 sm:p-3 bg-zinc-50 hover:bg-zinc-100 rounded-2xl transition-all border border-zinc-100 group"
               title="Sinkronisasi Data"
             >
-              <RefreshCw className={`w-4 h-4 text-zinc-400 group-hover:text-black transition-colors ${loading ? 'animate-spin text-black' : ''}`} />
+              <RefreshCw className={`w-3.5 sm:w-4 h-3.5 sm:h-4 text-zinc-400 group-hover:text-black transition-colors ${loading ? 'animate-spin text-black' : ''}`} />
             </button>
             <button 
               onClick={handleLogout}
-              className="p-3 bg-zinc-50 hover:bg-red-50 rounded-2xl transition-all border border-zinc-100 text-zinc-400 hover:text-red-600 group"
+              className="p-2 sm:p-3 bg-zinc-50 hover:bg-red-50 rounded-2xl transition-all border border-zinc-100 text-zinc-400 hover:text-red-600 group"
               title="Keluar"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
             </button>
           </div>
         </div>
@@ -442,14 +443,14 @@ export default function Dashboard({ authStatus }: DashboardProps) {
         ) : (
           <>
             {/* List View Column */}
-            <section className="flex-1 md:w-[65%] flex flex-col bg-slate-50 overflow-hidden relative">
-          <div className="p-8 pb-4 flex justify-between items-center">
+            <section className="flex-1 lg:w-[65%] flex flex-col bg-slate-50 overflow-hidden relative">
+          <div className="p-4 sm:p-8 pb-4 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div className="flex flex-col">
               <h2 className="text-sm font-bold text-zinc-400 mb-1">
                 {activeTab === "inventaris" ? "Daftar Pengadaan Aktif" : activeTab === "disetujui" ? "Daftar Pengadaan Disetujui" : "Daftar Pengadaan Ditolak"}
               </h2>
               <div className="flex items-center gap-4">
-                <span className="text-3xl font-display font-bold tracking-tight">
+                <span className="text-2xl sm:text-3xl font-display font-bold tracking-tight">
                   {activeTab === "inventaris" ? "Inventaris" : activeTab === "disetujui" ? "Disetujui" : "Ditolak"}
                 </span>
                 <span className="px-3 py-1 bg-black text-white rounded-full text-[11px] font-bold">
@@ -458,37 +459,37 @@ export default function Dashboard({ authStatus }: DashboardProps) {
               </div>
             </div>
             
-            <div className="flex items-center gap-4">
-              {/* Mobile Tab Switcher */}
-              <div className="lg:hidden flex bg-zinc-100 p-1 rounded-xl">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full lg:w-auto">
+              {/* PC & Mobile Tab Switcher */}
+              <div className="flex bg-zinc-100 p-1 rounded-xl w-full sm:w-auto overflow-x-auto no-scrollbar">
                  <button 
                   onClick={() => setActiveTab("inventaris")}
-                  className={`px-4 py-2 rounded-lg text-[10px] font-bold transition-all ${activeTab === "inventaris" ? "bg-white text-black shadow-sm" : "text-zinc-400"}`}
+                  className={`flex-1 sm:px-6 py-2.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all whitespace-nowrap ${activeTab === "inventaris" ? "bg-white text-black shadow-sm" : "text-zinc-500 hover:text-zinc-700"}`}
                  >
-                   Inv
+                   Inventaris
                  </button>
                  <button 
                   onClick={() => setActiveTab("disetujui")}
-                  className={`px-4 py-2 rounded-lg text-[10px] font-bold transition-all ${activeTab === "disetujui" ? "bg-white text-black shadow-sm" : "text-zinc-400"}`}
+                  className={`flex-1 sm:px-6 py-2.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all whitespace-nowrap ${activeTab === "disetujui" ? "bg-white text-black shadow-sm" : "text-zinc-500 hover:text-zinc-700"}`}
                  >
-                   Suju
+                   Disetujui
                  </button>
                  <button 
                   onClick={() => setActiveTab("ditolak")}
-                  className={`px-4 py-2 rounded-lg text-[10px] font-bold transition-all ${activeTab === "ditolak" ? "bg-white text-black shadow-sm" : "text-zinc-400"}`}
+                  className={`flex-1 sm:px-6 py-2.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all whitespace-nowrap ${activeTab === "ditolak" ? "bg-white text-black shadow-sm" : "text-zinc-500 hover:text-zinc-700"}`}
                  >
-                   Tolak
+                   Ditolak
                  </button>
               </div>
 
-              <div className="relative">
+              <div className="relative w-full sm:w-60 lg:focus-within:w-80 transition-all duration-300">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-300" />
                 <input 
                   type="text" 
                   placeholder="Cari barang..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-11 pr-5 py-3 bg-white border border-zinc-100 rounded-2xl focus:border-black outline-none text-sm font-medium transition-all w-60 focus:w-80 shadow-sm"
+                  className="w-full pl-11 pr-5 py-3 bg-white border border-zinc-100 rounded-2xl focus:border-black outline-none text-sm font-medium transition-all shadow-sm"
                 />
               </div>
             </div>
@@ -544,116 +545,130 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                         )}
                       </div>
 
-                      <div className="flex-1 flex flex-col sm:flex-row items-start sm:items-center gap-6">
-                        <div className="w-full sm:w-28 shrink-0 flex sm:flex-col items-center sm:items-start justify-between sm:justify-center gap-2">
+                      <div className="flex-1 flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-6 w-full min-w-0">
+                        <div className="w-full md:w-28 shrink-0 flex flex-row md:flex-col items-center md:items-start justify-between md:justify-center gap-2 border-b md:border-b-0 border-zinc-50 pb-3 md:pb-0">
                           <div className="space-y-1">
-                            <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Waktu Pengadaan</div>
-                            <div className="text-[11px] font-bold text-zinc-300 uppercase tracking-widest leading-none">{item.timestamp?.split(',')[0]}</div>
-                            <div className="text-xs font-bold text-zinc-900 leading-none">
-                              {item.timestamp?.split(',')[1]?.trim().split(/[.:]/).slice(0, 2).join(':')}
+                            <div className="text-[8px] sm:text-[9px] font-bold text-zinc-400 uppercase tracking-widest leading-none">Waktu Pengadaan</div>
+                            <div className="flex items-center gap-2 md:block">
+                              <div className="text-[10px] sm:text-[11px] font-bold text-zinc-300 uppercase tracking-widest leading-none">{item.timestamp?.split(',')[0]}</div>
+                              <div className="text-xs sm:text-sm font-bold text-zinc-900 leading-none">
+                                {item.timestamp?.split(',')[1]?.trim().split(/[.:]/).slice(0, 2).join(':')}
+                              </div>
                             </div>
                           </div>
                           {item.verificationStatus === 'PENDING' && (
-                            <div className="flex gap-2">
+                            <div className="flex gap-1.5 sm:gap-2">
                               <button 
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleApprove(item);
                                 }}
-                                className="p-2.5 rounded-full transition-all border bg-white border-zinc-100 text-zinc-300 hover:bg-zinc-50 hover:text-green-500"
-                                title="Setujui Pengadaan"
+                                className="p-2 sm:p-2.5 rounded-full transition-all border bg-white border-zinc-100 text-zinc-300 hover:bg-zinc-50 hover:text-green-500 shadow-sm"
+                                title="Setujui"
                               >
-                                <CheckCircle2 className="w-5 h-5" />
+                                <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
                               </button>
                               <button 
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleReject(item);
                                 }}
-                                className="p-2.5 rounded-full transition-all border bg-white border-zinc-100 text-zinc-300 hover:bg-zinc-50 hover:text-red-500"
-                                title="Tolak Pengadaan"
+                                className="p-2 sm:p-2.5 rounded-full transition-all border bg-white border-zinc-100 text-zinc-300 hover:bg-zinc-50 hover:text-red-500 shadow-sm"
+                                title="Tolak"
                               >
-                                <X className="w-5 h-5" />
+                                <X className="w-4 h-4 sm:w-5 sm:h-5" />
                               </button>
                             </div>
                           )}
                         </div>
                         
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[9px] font-black bg-zinc-100 text-zinc-400 px-1.5 py-0.5 rounded uppercase tracking-tighter shrink-0">{item.id}</span>
-                            <h4 className="text-lg font-display font-bold tracking-tight uppercase truncate">{item.name}</h4>
+                        <div className="flex-1 min-w-0 w-full">
+                          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                            <span className="text-[8px] sm:text-[9px] font-black bg-zinc-900 text-white px-1.5 py-0.5 rounded uppercase tracking-tighter shrink-0">{item.id}</span>
+                            <h4 className="text-base sm:text-lg font-display font-bold tracking-tight uppercase truncate max-w-full">{item.name}</h4>
                           </div>
-                          <p className="text-xs text-zinc-400 font-medium line-clamp-1 mb-3">{item.description || "Tidak ada deskripsi."}</p>
+                          <p className="text-[11px] sm:text-xs text-zinc-400 font-medium line-clamp-2 mb-4 leading-relaxed">{item.description || "Tidak ada deskripsi."}</p>
                           
-                          <div className="flex flex-wrap gap-2">
-                             <div className="flex items-center gap-2 bg-zinc-50 px-3 py-1 rounded-lg border border-zinc-100">
-                               <Package className="w-3.5 h-3.5 text-zinc-400" />
-                               <span className="text-xs font-bold">{item.quantity}</span>
+                          <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                             <div className="flex items-center gap-1.5 sm:gap-2 bg-zinc-50 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg border border-zinc-100">
+                               <Package className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-zinc-400" />
+                               <span className="text-[10px] sm:text-xs font-bold">{item.quantity} <span className="text-[8px] uppercase text-zinc-400 ml-0.5">{item.unit || 'Unit'}</span></span>
                              </div>
                              {item.storeLocation && (
-                               <div className="flex items-center gap-2 bg-zinc-50 px-3 py-1 rounded-lg border border-zinc-100">
-                                 <span className="text-[10px] font-bold text-zinc-400 uppercase">Lokasi:</span>
-                                 <span className="text-[10px] font-bold uppercase truncate max-w-[100px]">{item.storeLocation}</span>
+                               <div className="flex items-center gap-1.5 sm:gap-2 bg-zinc-50 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg border border-zinc-100">
+                                 <span className="text-[8px] sm:text-[10px] font-bold text-zinc-400 uppercase">Lokasi:</span>
+                                 <span className="text-[8px] sm:text-[10px] font-bold uppercase truncate max-w-[80px] sm:max-w-[120px]">{item.storeLocation}</span>
                                </div>
                              )}
-                             <div className="flex items-center gap-2 bg-zinc-50 px-3 py-1 rounded-lg border border-zinc-100">
-                               <span className="text-[10px] font-bold text-zinc-400 uppercase">Prioritas:</span>
-                               <span className={`text-[10px] font-bold uppercase tracking-wider ${item.status.includes('Urgent') || item.status.includes('Mendesak') ? 'text-red-500' : 'text-zinc-600'}`}>
+                             <div className="flex items-center gap-1.5 sm:gap-2 bg-zinc-50 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg border border-zinc-100">
+                               <span className="text-[8px] sm:text-[10px] font-bold text-zinc-400 uppercase">Status:</span>
+                               <span className={`text-[8px] sm:text-[10px] font-bold uppercase tracking-wider ${item.status.includes('Urgent') || item.status.includes('Mendesak') ? 'text-red-500' : 'text-zinc-600'}`}>
                                  {item.status}
                                </span>
                              </div>
                              {item.verificationStatus !== "PENDING" && item.verificationStatus && (
-                               <div className={`flex items-center gap-2 px-3 py-1 rounded-lg border ${item.verificationStatus === 'APPROVED' ? 'bg-green-50 border-green-100 text-green-700' : 'bg-red-50 border-red-100 text-red-700'}`}>
-                                 <span className="text-[10px] font-bold uppercase">Verifikator:</span>
-                                 <span className="text-[10px] font-bold uppercase truncate max-w-[80px]">{item.verifierName}</span>
+                               <div className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg border ${item.verificationStatus === 'APPROVED' ? 'bg-green-50 border-green-100 text-green-700' : 'bg-red-50 border-red-100 text-red-700'}`}>
+                                 <span className="text-[8px] sm:text-[10px] font-bold uppercase">Verif:</span>
+                                 <span className="text-[8px] sm:text-[10px] font-bold uppercase truncate max-w-[60px] sm:max-w-[100px]">{item.verifierName}</span>
                                </div>
                              )}
                           </div>
                           {item.verificationReason && (
-                            <p className="mt-2 text-[10px] font-medium text-zinc-500 italic">" {item.verificationReason} "</p>
+                            <p className="mt-3 text-[9px] sm:text-[10px] font-medium text-zinc-400 italic line-clamp-2">" {item.verificationReason} "</p>
                           )}
                         </div>
  
-                        <div className="text-right shrink-0">
-                           <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Total Valuasi</p>
-                           <p className="text-xl font-display font-bold tracking-tight">Rp{Number(item.totalPrice).toLocaleString()}</p>
+                        <div className="text-left md:text-right shrink-0 w-full md:w-auto border-t md:border-t-0 border-zinc-50 pt-3 md:pt-0">
+                           <p className="text-[8px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1 leading-none">Total Valuasi</p>
+                           <p className="text-xl sm:text-2xl font-display font-bold tracking-tight text-zinc-900 leading-none">Rp{Number(item.totalPrice).toLocaleString()}</p>
                         </div>
                       </div>
 
-                      <div className="w-full sm:w-auto grid grid-cols-3 sm:flex items-center gap-2 border-t sm:border-t-0 sm:border-l border-zinc-100 pt-4 sm:pt-0 sm:pl-6 shrink-0">
+                      <div className="w-full lg:w-auto flex flex-row lg:flex-col items-center justify-center gap-1.5 border-t lg:border-t-0 lg:border-l border-zinc-50/50 pt-4 lg:pt-0 lg:pl-6 shrink-0">
                         {item.refLink ? (
                           <a 
                             href={item.refLink} 
                             target="_blank" 
                             rel="noreferrer" 
-                            className="w-full sm:w-12 sm:h-12 py-4 sm:py-0 rounded-2xl bg-zinc-50 flex items-center justify-center text-zinc-400 hover:bg-black hover:text-white transition-all shadow-sm group"
+                            className="flex-1 lg:flex-none w-full lg:w-11 lg:h-11 py-3.5 lg:py-0 rounded-xl lg:rounded-2xl bg-zinc-50 flex items-center justify-center text-zinc-400 hover:bg-black hover:text-white transition-all shadow-sm group"
                             title="Tautan Referensi"
                           >
-                            <ExternalLink className="w-5 h-5" />
+                            <ExternalLink className="w-4 h-4 sm:w-5 sm:h-5" />
                           </a>
                         ) : (
-                          <div className="w-full sm:w-12 sm:h-12 py-4 sm:py-0 rounded-2xl bg-zinc-50/50 flex items-center justify-center text-zinc-200 cursor-not-allowed">
-                            <ExternalLink className="w-5 h-5 opacity-20" />
+                          <div className="flex-1 lg:flex-none w-full lg:w-11 lg:h-11 py-3.5 lg:py-0 rounded-xl lg:rounded-2xl bg-zinc-50/30 flex items-center justify-center text-zinc-100 cursor-not-allowed">
+                            <ExternalLink className="w-4 h-4 sm:w-5 sm:h-5 opacity-20" />
                           </div>
                         )}
-                        <button 
-                          onClick={() => {
-                            setEditingItem(item);
-                            setIsFormOpen(true);
-                          }}
-                          className="w-full sm:w-12 sm:h-12 py-4 sm:py-0 rounded-2xl bg-zinc-50 flex items-center justify-center text-zinc-400 hover:bg-black hover:text-white transition-all shadow-sm"
-                          title="Ubah Data"
-                        >
-                          <Edit3 className="w-5 h-5" />
-                        </button>
-                        <button 
-                          onClick={() => setDeleteConfirmItem(item)}
-                          className="w-full sm:w-12 sm:h-12 py-4 sm:py-0 rounded-2xl bg-red-50 flex items-center justify-center text-red-300 hover:bg-red-600 hover:text-white transition-all shadow-sm"
-                          title="Hapus Data"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
+                        
+                        {/* Role Based Access Control for Edit/Delete */}
+                        {(authStatus.role === 'ADMIN' || (authStatus.role === 'USER' && (item.verificationStatus === 'PENDING' || !item.verificationStatus))) ? (
+                          <>
+                            <button 
+                              onClick={() => {
+                                setEditingItem(item);
+                                setIsFormOpen(true);
+                              }}
+                              className="flex-1 lg:flex-none w-full lg:w-11 lg:h-11 py-3.5 lg:py-0 rounded-xl lg:rounded-2xl bg-zinc-50 flex items-center justify-center text-zinc-400 hover:bg-black hover:text-white transition-all shadow-sm"
+                              title="Ubah Data"
+                            >
+                              <Edit3 className="w-4 h-4 sm:w-5 sm:h-5" />
+                            </button>
+                            <button 
+                              onClick={() => setDeleteConfirmItem(item)}
+                              className="flex-1 lg:flex-none w-full lg:w-11 lg:h-11 py-3.5 lg:py-0 rounded-xl lg:rounded-2xl bg-red-50 flex items-center justify-center text-red-300 hover:bg-red-600 hover:text-white transition-all shadow-sm"
+                              title="Hapus Data"
+                            >
+                              <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                            </button>
+                          </>
+                        ) : (
+                          <div className="flex-[2] lg:flex-none w-full lg:w-11 lg:h-24 bg-zinc-50 rounded-xl lg:rounded-2xl border border-zinc-100 flex items-center justify-center px-2">
+                             <div className="rotate-0 lg:-rotate-90 italic text-[8px] sm:text-[9px] font-black text-zinc-300 uppercase tracking-tighter whitespace-nowrap">
+                               Akses Terkunci
+                             </div>
+                          </div>
+                        )}
                       </div>
                     </motion.div>
                   ))}
@@ -664,7 +679,7 @@ export default function Dashboard({ authStatus }: DashboardProps) {
         </section>
 
         {/* Form Column */}
-        <aside className="hidden md:flex flex-col w-[35%] bg-white border-l border-zinc-100 overflow-hidden shadow-[0_0_100px_-20px_rgba(0,0,0,0.05)]">
+        <aside className="hidden lg:flex flex-col w-[35%] bg-white border-l border-zinc-100 overflow-hidden shadow-[0_0_100px_-20px_rgba(0,0,0,0.05)]">
           <div className="p-10 flex-1 overflow-y-auto">
             <div className="mb-10">
               <div className="inline-flex items-center gap-2 px-3 py-1 bg-zinc-50 border border-zinc-100 rounded-full mb-4">
@@ -854,7 +869,7 @@ export default function Dashboard({ authStatus }: DashboardProps) {
 
               <div className="pt-6 flex flex-col gap-3">
                 <div className="flex gap-3">
-                  {editingItem && (
+                  {editingItem && (authStatus.role === 'ADMIN' || (authStatus.role === 'USER' && (editingItem.verificationStatus === 'PENDING' || !editingItem.verificationStatus))) && (
                     <button 
                       type="button"
                       onClick={() => setDeleteConfirmItem(editingItem)}
@@ -863,12 +878,19 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                       Hapus
                     </button>
                   )}
-                  <button 
-                    type="submit"
-                    className={`${editingItem ? 'flex-[2]' : 'flex-1'} bg-black hover:scale-[1.02] active:scale-[0.98] text-white font-display font-bold py-5 rounded-[24px] text-lg shadow-xl shadow-black/10 transition-all`}
-                  >
-                    {editingItem ? "Ubah Data" : "Simpan Data"}
-                  </button>
+                  
+                  {(!editingItem || authStatus.role === 'ADMIN' || (authStatus.role === 'USER' && (editingItem.verificationStatus === 'PENDING' || !editingItem.verificationStatus))) ? (
+                    <button 
+                      type="submit"
+                      className={`${editingItem ? 'flex-[2]' : 'flex-1'} bg-black hover:scale-[1.02] active:scale-[0.98] text-white font-display font-bold py-5 rounded-[24px] text-lg shadow-xl shadow-black/10 transition-all`}
+                    >
+                      {editingItem ? "Ubah Data" : "Simpan Data"}
+                    </button>
+                  ) : (
+                    <div className="flex-1 bg-zinc-100 text-zinc-400 font-bold py-5 rounded-[24px] text-center text-sm border border-zinc-200">
+                      Data Terkunci (Sudah Terverifikasi)
+                    </div>
+                  )}
                 </div>
                 {editingItem && (
                   <button 
@@ -905,7 +927,7 @@ export default function Dashboard({ authStatus }: DashboardProps) {
       {/* Mobile Interaction Layer */}
       <AnimatePresence>
         {isFormOpen && (
-          <div className="fixed inset-0 z-50 md:hidden flex flex-col justify-end">
+          <div className="fixed inset-0 z-50 lg:hidden flex flex-col justify-end">
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1051,7 +1073,7 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                   )}
                 </div>
                 <div className="flex gap-4 pt-6">
-                  {editingItem && (
+                  {editingItem && (authStatus.role === 'ADMIN' || (authStatus.role === 'USER' && (editingItem.verificationStatus === 'PENDING' || !editingItem.verificationStatus))) && (
                     <button 
                       type="button" 
                       onClick={() => {
@@ -1062,9 +1084,16 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                       Hapus
                     </button>
                   )}
-                  <button type="submit" className={`${editingItem ? 'flex-[2]' : 'w-full'} bg-black text-white font-display font-bold py-6 rounded-[24px] text-xl active:scale-95 transition-all shadow-xl shadow-black/20`}>
-                    {editingItem ? "Ubah Data" : "Simpan Data"}
-                  </button>
+
+                  {(!editingItem || authStatus.role === 'ADMIN' || (authStatus.role === 'USER' && (editingItem.verificationStatus === 'PENDING' || !editingItem.verificationStatus))) ? (
+                    <button type="submit" className={`${editingItem ? 'flex-[2]' : 'w-full'} bg-black text-white font-display font-bold py-6 rounded-[24px] text-xl active:scale-95 transition-all shadow-xl shadow-black/20`}>
+                      {editingItem ? "Ubah Data" : "Simpan Data"}
+                    </button>
+                  ) : (
+                    <div className="w-full bg-zinc-100 text-zinc-400 font-bold py-6 rounded-[24px] text-center text-sm border border-zinc-200">
+                      Terkunci (Sudah Terverifikasi)
+                    </div>
+                  )}
                 </div>
               </form>
             </motion.div>
@@ -1221,22 +1250,20 @@ export default function Dashboard({ authStatus }: DashboardProps) {
       <button 
         onClick={() => {
           if (activeMainTab === "accounts") {
-             // Maybe different action or same for adding user?
-             // For now just toggle back to dashboard
              setActiveMainTab("dashboard");
           } else {
             setEditingItem(null);
             setIsFormOpen(true);
           }
         }}
-        className="md:hidden fixed bottom-10 right-10 w-20 h-20 bg-black text-white rounded-full shadow-2xl shadow-black/30 flex items-center justify-center active:scale-90 transition-all z-40 border-4 border-white"
+        className="lg:hidden fixed bottom-10 right-10 w-20 h-20 bg-black text-white rounded-full shadow-2xl shadow-black/30 flex items-center justify-center active:scale-90 transition-all z-40 border-4 border-white"
       >
         {activeMainTab === "accounts" ? <FileSpreadsheet className="w-10 h-10" /> : <Plus className="w-10 h-10" />}
       </button>
 
       {/* Mobile Role Navigation (Floating) */}
       {authStatus.role === 'ADMIN' && (
-        <div className="md:hidden fixed bottom-10 left-10 flex gap-2 z-40">
+        <div className="lg:hidden fixed bottom-10 left-10 flex gap-2 z-40">
            <button 
             onClick={() => setActiveMainTab(activeMainTab === "dashboard" ? "accounts" : "dashboard")}
             className="w-14 h-14 bg-white text-black border-2 border-zinc-100 rounded-2xl shadow-xl flex items-center justify-center active:scale-90 transition-all"
