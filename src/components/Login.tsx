@@ -35,7 +35,7 @@ export default function Login() {
         msg = `Kesalahan Konfigurasi Server (500). Detail: ${details}`;
       }
 
-      alert(`Login Error: ${msg}\n\nLangkah Perbaikan Penting:\n1. Buka Google Cloud Console.\n2. Tambahkan URL berikut ke bagian "Authorized redirect URIs":\n\n${requiredUrl}\n\n3. Pastikan Client ID dan Secret sudah benar di Settings > Secrets aplikasi ini.`);
+      alert(`Login Error: ${msg}\n\nLangkah Perbaikan Penting:\n1. Buka Google Cloud Console.\n2. Tambahkan URL berikut ke bagian "Authorized redirect URIs":\n\n${requiredUrl}\n\n3. Jika ada APP_URL di Settings > Secrets, harap HAPUS agar aplikasi dapat mendeteksi URL secara otomatis.`);
       setLoading(false);
     }
   };

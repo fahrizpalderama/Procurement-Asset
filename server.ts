@@ -18,13 +18,19 @@ app.use(cookieParser());
 const upload = multer({ dest: "uploads/" });
 
 const getAppUrl = (req?: express.Request) => {
-  if (process.env.APP_URL) {
+  // If user explicitly set APP_URL in secrets, use it. 
+  // RECOMMENDED: Leave APP_URL empty in Secrets to allow dynamic detection.
+  if (process.env.APP_URL && process.env.APP_URL !== "DYNAMIC") {
     return process.env.APP_URL.replace(/\/$/, "");
   }
   if (req) {
-    const protocol = req.headers["x-forwarded-proto"] || req.protocol;
+    const protocol = req.headers["x-forwarded-proto"] || req.protocol || "http";
     const host = req.headers["x-forwarded-host"] || req.get("host");
-    if (host) return `${protocol}://${host}`;
+    if (host) {
+      // Clean host if it contains internal ports or proxy artifacts
+      const cleanHost = String(host).split(',')[0].trim();
+      return `${protocol}://${cleanHost}`;
+    }
   }
   if (process.env.VERCEL_URL) {
     return `https://${process.env.VERCEL_URL}`;
@@ -205,32 +211,37 @@ app.get("/api/auth/url", (req, res) => {
     console.log("Generated Auth URL with Redirect URI:", dynamicCallbackUrl);
     res.json({ url });
   } catch (error: any) {
-    console.error("Error generating auth URL:", error.message);
+    const dynamicCallbackUrl = getCallbackUrl(req);
+    console.error("Auth URL Generation Failed:", error.message);
     res.status(500).json({ 
       error: "Authentication Configuration Error", 
       details: error.message,
-      required_callback_url: dynamicCallbackUrl
+      required_callback_url: dynamicCallbackUrl,
+      hint: "Pastikan GOOGLE_CLIENT_ID dan GOOGLE_CLIENT_SECRET sudah benar di Settings > Secrets."
     });
   }
 });
 
 app.get(["/auth/callback", "/auth/callback/"], async (req, res) => {
-  const { code, error } = req.query;
+  const { code, error: queryError } = req.query;
   const dynamicCallbackUrl = getCallbackUrl(req);
-  console.log("Auth Callback Received:", { code: code ? "PRESENT" : "MISSING", error, redirect_uri: dynamicCallbackUrl });
+  
+  console.log("--- Google Auth Callback ---");
+  console.log("Status:", code ? "Code Received" : "No Code");
+  if (queryError) console.log("Google error:", queryError);
+  console.log("Expected Redirect URI:", dynamicCallbackUrl);
 
-  if (error) {
-    console.error("OAuth error from Google:", error);
-    return res.status(400).send(`Authentication failed: ${error}`);
+  if (queryError) {
+    return res.status(400).send(`Authentication failed from Google side: ${queryError}`);
   }
 
   const codeStr = code as string;
   if (!codeStr) {
-    return res.status(400).send("Missing authorization code");
+    return res.status(400).send("No authorization code provided in the callback URL.");
   }
 
   try {
-    console.log("Starting token exchange using Redirect URI:", dynamicCallbackUrl);
+    console.log("Attempting to exchange code for tokens...");
     
     const exchangeClient = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
@@ -239,34 +250,36 @@ app.get(["/auth/callback", "/auth/callback/"], async (req, res) => {
     );
 
     const { tokens } = await exchangeClient.getToken(codeStr);
-    console.log("Tokens received successfully");
+    console.log("Tokens received successfully from Google.");
     
     if (!tokens) {
-      throw new Error("Google returned an empty token response");
+      throw new Error("Google returned a successful response but with empty tokens.");
     }
+
+    // Determine cookie security based on protocol
+    const isHttps = dynamicCallbackUrl.startsWith("https");
 
     // Set tokens in a secure cookie
     res.cookie("google_tokens", JSON.stringify(tokens), {
       httpOnly: true,
-      secure: true,
-      sameSite: "none",
+      secure: isHttps,
+      sameSite: isHttps ? "none" : "lax",
       maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
     });
 
-    console.log("Successfully set auth cookie for user");
-
-    console.log("Auth cookie set, sending success script");
+    console.log("Auth session established. Sending success response.");
 
     res.send(`
       <html>
         <body style="font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f9fafb;">
-          <div style="text-align: center; padding: 2rem; background: white; border-radius: 8px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);">
-            <h1 style="color: #111827; margin-bottom: 0.5rem;">Berhasil!</h1>
-            <p style="color: #4b5563;">Autentikasi berhasil. Jendela ini akan tertutup otomatis.</p>
+          <div style="text-align: center; padding: 2rem; background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); border: 1px solid #e5e7eb;">
+            <div style="color: #10b981; font-size: 3rem; margin-bottom: 1rem;">✓</div>
+            <h1 style="color: #111827; margin-bottom: 0.5rem; font-size: 1.5rem;">Autentikasi Berhasil</h1>
+            <p style="color: #4b5563;">Menghubungkan ke aplikasi...</p>
             <script>
               if (window.opener) {
                 window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS' }, '*');
-                setTimeout(() => window.close(), 1000);
+                setTimeout(() => window.close(), 800);
               } else {
                 window.location.href = '/';
               }
@@ -276,21 +289,44 @@ app.get(["/auth/callback", "/auth/callback/"], async (req, res) => {
       </html>
     `);
   } catch (error: any) {
-    console.error("Critical Token Exchange Failure:", error.response?.data || error.message);
+    const errorData = error.response?.data || {};
+    const errorCode = errorData.error || "";
+    const errorDesc = errorData.error_description || error.message;
+
+    console.error("Token Exchange Failure:", {
+      message: error.message,
+      data: errorData
+    });
+
+    let instruction = "Pastikan Anda telah menambahkan URL di bawah ini ke 'Authorized redirect URIs' di Google Cloud Console.";
+    if (errorCode === "redirect_uri_mismatch") {
+      instruction = "<strong>KESALAHAN REDIRECT URI:</strong> URL yang terdeteksi tidak cocok dengan yang ada di Google Cloud Console.";
+    }
+
     res.status(500).send(`
       <html>
-        <body style="font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #fff1f2;">
-          <div style="text-align: center; padding: 2.5rem; background: white; border-radius: 12px; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1); border: 2px solid #fecaca; max-width: 500px;">
-            <h1 style="color: #991b1b; margin-bottom: 0.5rem; font-size: 1.5rem;">Autentikasi Gagal</h1>
-            <p style="color: #4b5563; margin-bottom: 1.5rem;">Terjadi kesalahan saat memvalidasi kode akses dari Google.</p>
-            <div style="background: #f8fafc; padding: 1rem; border-radius: 6px; text-align: left; margin-bottom: 1.5rem; border: 1px solid #e2e8f0;">
-              <p style="font-family: monospace; font-size: 12px; color: #64748b; margin: 0; word-break: break-all;">
-                Error: ${error.message}
-              </p>
+        <body style="font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #fff1f2; padding: 20px;">
+          <div style="text-align: center; padding: 2.5rem; background: white; border-radius: 16px; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1); border: 2px solid #fecaca; max-width: 550px; width: 100%;">
+            <div style="color: #ef4444; font-size: 3rem; margin-bottom: 0.5rem;">✕</div>
+            <h1 style="color: #991b1b; margin-bottom: 1rem; font-size: 1.5rem;">Gagal Menukar Kode Akses</h1>
+            <p style="color: #4b5563; margin-bottom: 1.5rem; font-size: 14px;">${instruction}</p>
+            
+            <div style="background: #f8fafc; padding: 1.25rem; border-radius: 8px; text-align: left; margin-bottom: 1.5rem; border: 1px solid #e2e8f0;">
+               <p style="font-size: 11px; font-weight: bold; color: #64748b; margin-bottom: 8px; text-transform: uppercase;">Deteksi Redirect URI Aplikasi:</p>
+               <code style="display: block; font-family: monospace; font-size: 12px; color: #0f172a; word-break: break-all; background: #fff; padding: 8px; border: 1px solid #cbd5e1; border-radius: 4px;">
+                 ${dynamicCallbackUrl}
+               </code>
+               
+               <p style="font-size: 11px; font-weight: bold; color: #64748b; margin-top: 15px; margin-bottom: 8px; text-transform: uppercase;">Detail Error dari Google:</p>
+               <p style="font-family: monospace; font-size: 12px; color: #b91c1c; margin: 0; padding: 8px; background: #fef2f2; border-radius: 4px;">
+                 [${errorCode}] ${errorDesc}
+               </p>
             </div>
-            <button onclick="window.close()" style="background: #ef4444; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 6px; font-weight: 600; cursor: pointer;">
-              Tutup Jendela
-            </button>
+            
+            <div style="display: flex; gap: 10px; justify-content: center;">
+              <button onclick="window.location.reload()" style="background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; padding: 0.75rem 1.25rem; border-radius: 8px; font-weight: 600; cursor: pointer;">Coba Lagi</button>
+              <button onclick="window.close()" style="background: #ef4444; color: white; border: none; padding: 0.75rem 1.25rem; border-radius: 8px; font-weight: 600; cursor: pointer;">Tutup</button>
+            </div>
           </div>
         </body>
       </html>
