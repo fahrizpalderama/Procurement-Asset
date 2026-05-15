@@ -39,6 +39,6 @@ export default function App() {
     );
   }
 
-  return authStatus.isAuthenticated ? <Dashboard /> : <Login />;
+  return authStatus.isAuthenticated ? <Dashboard authStatus={authStatus} /> : <Login />;
 }
 

@@ -27,6 +27,7 @@ const oauth2Client = new google.auth.OAuth2(
 const SCOPES = [
   "https://www.googleapis.com/auth/spreadsheets",
   "https://www.googleapis.com/auth/userinfo.profile",
+  "https://www.googleapis.com/auth/userinfo.email",
   "https://www.googleapis.com/auth/drive.file"
 ];
 
@@ -40,6 +41,114 @@ const getAuthorizedClient = (tokens: any) => {
   client.setCredentials(tokens);
   return client;
 };
+
+// --- CONFIG & HELPERS ---
+
+const SPREADSHEET_NAME = "Procurement_Data_App";
+const PHOTOS_FOLDER_NAME = "Procurement_Photos";
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "asset.sebelas11@gmail.com";
+const CONFIG_PATH = path.join(process.cwd(), "config.json");
+
+// Helper to get/set Master Spreadsheet ID
+const getMasterSpreadsheetId = () => {
+  if (process.env.MASTER_SPREADSHEET_ID) return process.env.MASTER_SPREADSHEET_ID;
+  if (fs.existsSync(CONFIG_PATH)) {
+    try {
+      const config = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf-8"));
+      return config.masterSpreadsheetId;
+    } catch (e) { return null; }
+  }
+  return null;
+};
+
+const setMasterSpreadsheetId = (id: string) => {
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify({ masterSpreadsheetId: id }));
+};
+
+async function getOrCreateMasterSpreadsheet(auth: any) {
+  let spreadsheetId = getMasterSpreadsheetId();
+  if (spreadsheetId) return spreadsheetId;
+
+  const drive = google.drive({ version: "v3", auth });
+  const sheets = google.sheets({ version: "v4", auth });
+
+  const response = await drive.files.list({
+    q: `name = '${SPREADSHEET_NAME}' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false`,
+    fields: "files(id, name)",
+  });
+
+  if (response.data.files && response.data.files.length > 0) {
+    spreadsheetId = response.data.files[0].id!;
+    console.log(`Found existing spreadsheet: ${spreadsheetId}`);
+    // Ensure Users sheet exists if we found an old one
+    await ensureSheetExists(sheets, spreadsheetId, "Users", ["Email", "Name", "AddedAt"]);
+    await ensureSheetExists(sheets, spreadsheetId, "Procurement", ["ID", "Timestamp", "Nama Barang", "Kuantitas", "Satuan", "Harga Satuan", "Harga Total", "Lokasi Store", "Prioritas", "Pemohon", "Deskripsi", "Link Referensi", "Foto Referensi", "Persetujuan", "Deskripsi Persetujuan", "Verifikator"]);
+  } else {
+    console.log("Creating new master spreadsheet...");
+    const createResp = await sheets.spreadsheets.create({
+      requestBody: {
+        properties: { title: SPREADSHEET_NAME },
+        sheets: [
+          { properties: { title: "Procurement" } },
+          { properties: { title: "Users" } }
+        ]
+      }
+    });
+    spreadsheetId = createResp.data.spreadsheetId!;
+    
+    // Initialize headers for Procurement
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: "Procurement!A1:P1",
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [["ID", "Timestamp", "Nama Barang", "Kuantitas", "Satuan", "Harga Satuan", "Harga Total", "Lokasi Store", "Prioritas", "Pemohon", "Deskripsi", "Link Referensi", "Foto Referensi", "Persetujuan", "Deskripsi Persetujuan", "Verifikator"]]
+      }
+    });
+
+    // Initialize headers for Users
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: "Users!A1:C1",
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [["Email", "Name", "AddedAt"]]
+      }
+    });
+  }
+  
+  if (spreadsheetId) setMasterSpreadsheetId(spreadsheetId);
+  return spreadsheetId;
+}
+
+async function ensureSheetExists(sheets: any, spreadsheetId: string, sheetName: string, headers: string[]) {
+  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
+  const sheet = spreadsheet.data.sheets?.find((s: any) => s.properties?.title === sheetName);
+  
+  if (!sheet) {
+    console.log(`Creating missing sheet: ${sheetName}`);
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [{
+          addSheet: {
+            properties: { title: sheetName }
+          }
+        }]
+      }
+    });
+    
+    // Initialize headers
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${sheetName}!A1`,
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [headers]
+      }
+    });
+  }
+}
 
 // --- AUTH ROUTES ---
 
@@ -89,9 +198,54 @@ app.get(["/auth/callback", "/auth/callback/"], async (req, res) => {
   }
 });
 
-app.get("/api/auth/status", (req, res) => {
-  const tokens = req.cookies.google_tokens;
-  res.json({ isAuthenticated: !!tokens });
+app.get("/api/auth/status", async (req, res) => {
+  const tokensStr = req.cookies.google_tokens;
+  if (!tokensStr) return res.json({ isAuthenticated: false });
+
+  try {
+    const tokens = JSON.parse(tokensStr);
+    const auth = getAuthorizedClient(tokens);
+    const oauth2 = google.oauth2({ version: "v2", auth });
+    const userInfo = await oauth2.userinfo.get();
+    
+    const email = userInfo.data.email;
+    if (!email) throw new Error("Email not found");
+
+    let role: 'ADMIN' | 'USER' | 'UNAUTHORIZED' = 'UNAUTHORIZED';
+
+    const userEmail = email.toLowerCase().trim();
+    const adminEmail = ADMIN_EMAIL.toLowerCase().trim();
+
+    if (userEmail === adminEmail) {
+      role = 'ADMIN';
+    } else {
+      // Check in Users sheet of Master Spreadsheet
+      try {
+        const masterId = await getOrCreateMasterSpreadsheet(auth);
+        if (masterId) {
+          const sheets = google.sheets({ version: "v4", auth });
+          const usersResp = await sheets.spreadsheets.values.get({
+            spreadsheetId: masterId,
+            range: "Users!A2:A100",
+          });
+          const allowedEmails = (usersResp.data.values || []).flat().map(e => String(e).toLowerCase().trim());
+          if (allowedEmails.includes(userEmail)) {
+            role = 'USER';
+          }
+        }
+      } catch (e) {
+        console.error("Error checking user role:", e);
+      }
+    }
+
+    res.json({ 
+      isAuthenticated: true, 
+      user: userInfo.data,
+      role 
+    });
+  } catch (error) {
+    res.json({ isAuthenticated: false });
+  }
 });
 
 app.post("/api/auth/logout", (req, res) => {
@@ -103,9 +257,6 @@ app.post("/api/auth/logout", (req, res) => {
 });
 
 // --- GOOGLE SHEETS PROXY ---
-
-const SPREADSHEET_NAME = "Procurement_Data_App";
-const PHOTOS_FOLDER_NAME = "Procurement_Photos";
 
 app.post("/api/upload", upload.single("file"), async (req, res) => {
   const tokensStr = req.cookies.google_tokens;
@@ -214,39 +365,10 @@ app.get("/api/sheets/data", async (req, res) => {
   try {
     const tokens = JSON.parse(tokensStr);
     const auth = getAuthorizedClient(tokens);
-    const drive = google.drive({ version: "v3", auth });
     const sheets = google.sheets({ version: "v4", auth });
 
-    // 1. Find or create spreadsheet
-    let spreadsheetId = "";
-    const response = await drive.files.list({
-      q: `name = '${SPREADSHEET_NAME}' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false`,
-      fields: "files(id, name)",
-    });
-
-    if (response.data.files && response.data.files.length > 0) {
-      spreadsheetId = response.data.files[0].id!;
-    } else {
-      const createResp = await sheets.spreadsheets.create({
-        requestBody: {
-          properties: { title: SPREADSHEET_NAME },
-          sheets: [{
-            properties: { title: "Procurement" }
-          }]
-        }
-      });
-      spreadsheetId = createResp.data.spreadsheetId!;
-      
-      // Initialize headers
-      await sheets.spreadsheets.values.update({
-        spreadsheetId,
-        range: "Procurement!A1:P1",
-        valueInputOption: "RAW",
-        requestBody: {
-          values: [["ID", "Timestamp", "Nama Barang", "Kuantitas", "Satuan", "Harga Satuan", "Harga Total", "Lokasi Store", "Prioritas", "Pemohon", "Deskripsi", "Link Referensi", "Foto Referensi", "Persetujuan", "Deskripsi Persetujuan", "Verifikator"]]
-        }
-      });
-    }
+    const spreadsheetId = await getOrCreateMasterSpreadsheet(auth);
+    if (!spreadsheetId) throw new Error("Could not find or create master spreadsheet");
 
     // 2. Read data
     const dataResp = await sheets.spreadsheets.values.get({
@@ -400,6 +522,156 @@ app.post("/api/sheets/verify", async (req, res) => {
   } catch (error) {
     console.error("Sheets Verify error:", error);
     res.status(500).json({ error: "Failed to verify item" });
+  }
+});
+
+app.get("/api/admin/users", async (req, res) => {
+  const tokensStr = req.cookies.google_tokens;
+  if (!tokensStr) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    const tokens = JSON.parse(tokensStr);
+    const auth = getAuthorizedClient(tokens);
+    const oauth2 = google.oauth2({ version: "v2", auth });
+    const userInfo = await oauth2.userinfo.get();
+    
+    const userEmail = userInfo.data.email?.toLowerCase().trim();
+    const adminEmail = ADMIN_EMAIL.toLowerCase().trim();
+    
+    if (userEmail !== adminEmail) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const masterId = await getOrCreateMasterSpreadsheet(auth);
+    const sheets = google.sheets({ version: "v4", auth });
+    
+    // Ensure Users sheet exists
+    await ensureSheetExists(sheets, masterId, "Users", ["Email", "Name", "AddedAt"]);
+
+    const usersResp = await sheets.spreadsheets.values.get({
+      spreadsheetId: masterId,
+      range: "Users!A2:C100",
+    });
+
+    const users = (usersResp.data.values || []).map((row, index) => ({
+      rowIndex: index + 2,
+      email: row[0],
+      name: row[1] || "",
+      addedAt: row[2] || ""
+    }));
+
+    res.json(users);
+  } catch (error: any) {
+    console.error("Fetch users error:", error.response?.data || error.message || error);
+    res.status(500).json({ error: "Failed to fetch users", details: error.message });
+  }
+});
+
+app.post("/api/admin/users/add", async (req, res) => {
+  const tokensStr = req.cookies.google_tokens;
+  if (!tokensStr) return res.status(401).json({ error: "Unauthorized" });
+
+  const { email, name } = req.body;
+  try {
+    const tokens = JSON.parse(tokensStr);
+    const auth = getAuthorizedClient(tokens);
+    const oauth2 = google.oauth2({ version: "v2", auth });
+    const userInfo = await oauth2.userinfo.get();
+    
+    const userEmail = userInfo.data.email?.toLowerCase().trim();
+    const adminEmail = ADMIN_EMAIL.toLowerCase().trim();
+    
+    if (userEmail !== adminEmail) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const masterId = await getOrCreateMasterSpreadsheet(auth);
+    const sheets = google.sheets({ version: "v4", auth });
+    const drive = google.drive({ version: "v3", auth });
+
+    // 0. Ensure Users sheet exists
+    await ensureSheetExists(sheets, masterId, "Users", ["Email", "Name", "AddedAt"]);
+
+    // 1. Add to sheet
+    console.log(`Adding user email to sheet: ${email}`);
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: masterId,
+      range: "Users!A:C",
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [[email, name || "", new Date().toISOString()]]
+      }
+    });
+
+    // 2. Share spreadsheet with user
+    console.log(`Sharing sheet ${masterId} with ${email}`);
+    try {
+      await drive.permissions.create({
+        fileId: masterId,
+        requestBody: {
+          role: 'writer',
+          type: 'user',
+          emailAddress: email
+        }
+      });
+    } catch (e: any) {
+      console.warn("Failed to share sheet automatically:", e.message);
+    }
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error("Add user error:", error.response?.data || error.message || error);
+    res.status(500).json({ error: "Failed to add user", details: error.message });
+  }
+});
+
+app.post("/api/admin/users/delete", async (req, res) => {
+  const tokensStr = req.cookies.google_tokens;
+  if (!tokensStr) return res.status(401).json({ error: "Unauthorized" });
+
+  const { rowIndex } = req.body;
+  try {
+    const tokens = JSON.parse(tokensStr);
+    const auth = getAuthorizedClient(tokens);
+    const oauth2 = google.oauth2({ version: "v2", auth });
+    const userInfo = await oauth2.userinfo.get();
+    
+    const userEmail = userInfo.data.email?.toLowerCase().trim();
+    const adminEmail = ADMIN_EMAIL.toLowerCase().trim();
+    
+    if (userEmail !== adminEmail) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const masterId = getMasterSpreadsheetId();
+    if (!masterId) throw new Error("Master spreadsheet not initialized");
+
+    const sheets = google.sheets({ version: "v4", auth });
+    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: masterId });
+    const sheet = spreadsheet.data.sheets?.find(s => s.properties?.title === "Users");
+    const sheetId = sheet?.properties?.sheetId;
+
+    if (sheetId === undefined) throw new Error("Users sheet not found");
+
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: masterId,
+      requestBody: {
+        requests: [{
+          deleteDimension: {
+            range: {
+              sheetId,
+              dimension: "ROWS",
+              startIndex: rowIndex - 1,
+              endIndex: rowIndex
+            }
+          }
+        }]
+      }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to delete user" });
   }
 });
 
