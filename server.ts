@@ -17,9 +17,14 @@ app.use(cookieParser());
 
 const upload = multer({ dest: "uploads/" });
 
-const getAppUrl = () => {
+const getAppUrl = (req?: express.Request) => {
   if (process.env.APP_URL) {
     return process.env.APP_URL.replace(/\/$/, "");
+  }
+  if (req) {
+    const protocol = req.headers["x-forwarded-proto"] || req.protocol;
+    const host = req.get("host");
+    if (host) return `${protocol}://${host}`;
   }
   if (process.env.VERCEL_URL) {
     return `https://${process.env.VERCEL_URL}`;
@@ -27,20 +32,24 @@ const getAppUrl = () => {
   return "http://localhost:3000";
 };
 
-const APP_URL = getAppUrl();
-const CALLBACK_URL = `${APP_URL}/auth/callback`;
+const getCallbackUrl = (req?: express.Request) => {
+  return `${getAppUrl(req)}/auth/callback`;
+};
 
+// oauth2Client initialized as a base template, dynamic clients used in routes
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
-  CALLBACK_URL
+  "http://localhost:3000/auth/callback" // Placeholder, dynamic callback used
 );
 
 console.log("Auth System Initialized:");
 console.log("- GOOGLE_CLIENT_ID:", process.env.GOOGLE_CLIENT_ID ? "PRESENT" : "MISSING");
 console.log("- GOOGLE_CLIENT_SECRET:", process.env.GOOGLE_CLIENT_SECRET ? "PRESENT" : "MISSING");
-console.log("- APP_URL:", APP_URL);
-console.log("- CALLBACK_URL:", CALLBACK_URL);
+console.log("- Base APP_URL:", getAppUrl());
+function logAuthInit(req: express.Request) {
+  console.log("Current Request Context Auth URI:", getCallbackUrl(req));
+}
 
 // Scopes for Google Sheets and profile
 const SCOPES = [
@@ -51,11 +60,11 @@ const SCOPES = [
 ];
 
 // Helper to get authorized client
-const getAuthorizedClient = (tokens: any) => {
+const getAuthorizedClient = (tokens: any, req?: express.Request) => {
   const client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    CALLBACK_URL
+    getCallbackUrl(req)
   );
   client.setCredentials(tokens);
   return client;
@@ -180,12 +189,20 @@ app.get("/api/auth/url", (req, res) => {
     if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
       throw new Error("Google OAuth credentials are not configured in environment variables.");
     }
-    const url = oauth2Client.generateAuthUrl({
+    
+    const dynamicCallbackUrl = getCallbackUrl(req);
+    const dynamicClient = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      dynamicCallbackUrl
+    );
+
+    const url = dynamicClient.generateAuthUrl({
       access_type: "offline",
       scope: SCOPES,
       prompt: "consent"
     });
-    console.log("Generated Auth URL:", url);
+    console.log("Generated Auth URL with Redirect URI:", dynamicCallbackUrl);
     res.json({ url });
   } catch (error: any) {
     console.error("Error generating auth URL:", error.message);
@@ -204,18 +221,17 @@ app.get(["/auth/callback", "/auth/callback/"], async (req, res) => {
 
   try {
     const codeStr = code as string;
-    console.log("Starting token exchange for code:", codeStr.substring(0, 10) + "...");
-    console.log("Current CALLBACK_URL configured in oauth2Client:", CALLBACK_URL);
+    const dynamicCallbackUrl = getCallbackUrl(req);
+    console.log("Starting token exchange using Redirect URI:", dynamicCallbackUrl);
     
-    // Create a fresh client for exchange to ensure state integrity
     const exchangeClient = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
-      CALLBACK_URL
+      dynamicCallbackUrl
     );
 
     const { tokens } = await exchangeClient.getToken(codeStr);
-    console.log("Tokens received successfully. Keys:", Object.keys(tokens));
+    console.log("Tokens received successfully");
     
     if (!tokens) {
       throw new Error("Google returned an empty token response");
@@ -283,7 +299,7 @@ app.get("/api/auth/status", async (req, res) => {
 
   try {
     const tokens = JSON.parse(tokensStr);
-    const auth = getAuthorizedClient(tokens);
+    const auth = getAuthorizedClient(tokens, req);
     const oauth2 = google.oauth2({ version: "v2", auth });
     const userInfo = await oauth2.userinfo.get();
     
@@ -349,8 +365,10 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
 
   try {
     const tokens = JSON.parse(tokensStr);
-    const auth = getAuthorizedClient(tokens);
+    const auth = getAuthorizedClient(tokens, req);
     const drive = google.drive({ version: "v3", auth });
+    
+    logAuthInit(req);
 
     // 1. Find or create photos folder
     let folderId = "";
@@ -426,7 +444,7 @@ app.get("/api/drive/image/:fileId", async (req, res) => {
 
   try {
     const tokens = JSON.parse(tokensStr);
-    const auth = getAuthorizedClient(tokens);
+    const auth = getAuthorizedClient(tokens, req);
     const drive = google.drive({ version: "v3", auth });
 
     const response = await drive.files.get(
@@ -448,7 +466,7 @@ app.get("/api/sheets/data", async (req, res) => {
 
   try {
     const tokens = JSON.parse(tokensStr);
-    const auth = getAuthorizedClient(tokens);
+    const auth = getAuthorizedClient(tokens, req);
     const sheets = google.sheets({ version: "v4", auth });
 
     const spreadsheetId = await getOrCreateMasterSpreadsheet(auth);
@@ -502,7 +520,7 @@ app.post("/api/sheets/add", async (req, res) => {
   const { spreadsheetId, item } = req.body;
   try {
     const tokens = JSON.parse(tokensStr);
-    const auth = getAuthorizedClient(tokens);
+    const auth = getAuthorizedClient(tokens, req);
     const sheets = google.sheets({ version: "v4", auth });
 
     const timestamp = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
@@ -547,7 +565,7 @@ app.post("/api/sheets/update", async (req, res) => {
     const { spreadsheetId, rowIndex, item } = req.body;
     try {
       const tokens = JSON.parse(tokensStr);
-      const auth = getAuthorizedClient(tokens);
+      const auth = getAuthorizedClient(tokens, req);
       const sheets = google.sheets({ version: "v4", auth });
   
       await sheets.spreadsheets.values.update({
@@ -590,7 +608,7 @@ app.post("/api/sheets/verify", async (req, res) => {
   const { spreadsheetId, rowIndex, status, reason, verifier } = req.body;
   try {
     const tokens = JSON.parse(tokensStr);
-    const auth = getAuthorizedClient(tokens);
+    const auth = getAuthorizedClient(tokens, req);
     const sheets = google.sheets({ version: "v4", auth });
 
     await sheets.spreadsheets.values.update({
@@ -615,7 +633,7 @@ app.get("/api/admin/users", async (req, res) => {
 
   try {
     const tokens = JSON.parse(tokensStr);
-    const auth = getAuthorizedClient(tokens);
+    const auth = getAuthorizedClient(tokens, req);
     const oauth2 = google.oauth2({ version: "v2", auth });
     const userInfo = await oauth2.userinfo.get();
     
@@ -658,7 +676,7 @@ app.post("/api/admin/users/add", async (req, res) => {
   const { email, name } = req.body;
   try {
     const tokens = JSON.parse(tokensStr);
-    const auth = getAuthorizedClient(tokens);
+    const auth = getAuthorizedClient(tokens, req);
     const oauth2 = google.oauth2({ version: "v2", auth });
     const userInfo = await oauth2.userinfo.get();
     
@@ -716,7 +734,7 @@ app.post("/api/admin/users/delete", async (req, res) => {
   const { rowIndex } = req.body;
   try {
     const tokens = JSON.parse(tokensStr);
-    const auth = getAuthorizedClient(tokens);
+    const auth = getAuthorizedClient(tokens, req);
     const oauth2 = google.oauth2({ version: "v2", auth });
     const userInfo = await oauth2.userinfo.get();
     
@@ -766,7 +784,7 @@ app.post("/api/sheets/delete", async (req, res) => {
   const { spreadsheetId, rowIndex, id, photoUrl } = req.body;
   try {
     const tokens = JSON.parse(tokensStr);
-    const auth = getAuthorizedClient(tokens);
+    const auth = getAuthorizedClient(tokens, req);
     const sheets = google.sheets({ version: "v4", auth });
     const drive = google.drive({ version: "v3", auth });
 
