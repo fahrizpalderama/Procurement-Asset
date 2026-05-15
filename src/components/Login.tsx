@@ -30,13 +30,20 @@ export default function Login() {
       const requiredUrl = data.required_callback_url || "URL aplikasi Anda/auth/callback";
       
       let msg = "Gagal menghubungi server autentikasi.";
-      if (details.includes("GOOGLE_CLIENT_ID belum diatur")) {
+      if (details) {
         msg = details;
       } else if (error.response?.status === 500) {
-        msg = `Kesalahan Konfigurasi Server (500). Detail: ${details}`;
+        msg = `Kesalahan Konfigurasi Server (500).`;
       }
 
-      alert(`Login Error: ${msg}\n\n${hint ? `Hint: ${hint}\n\n` : ""}Langkah Perbaikan Penting:\n1. Buka Google Cloud Console.\n2. Tambahkan URL berikut ke bagian "Authorized redirect URIs":\n\n${requiredUrl}\n\n3. Jika ada APP_URL di Settings > Secrets, harap HAPUS agar aplikasi dapat mendeteksi URL secara otomatis.`);
+      const repairSteps = [
+        "1. Buka Google Cloud Console.",
+        `2. Tambahkan URL berikut ke bagian 'Authorized redirect URIs':\n\n${requiredUrl}`,
+        "3. Pastikan Client ID dan Secret sudah diatur di Vercel Environment Variables.",
+        "4. Jalankan diagnostik di: " + window.location.origin + "/api/auth/diagnostic"
+      ];
+
+      alert(`Login Error: ${msg}\n\n${hint ? `Hint: ${hint}\n\n` : ""}Langkah Perbaikan Penting:\n\n${repairSteps.join('\n\n')}`);
       setLoading(false);
     }
   };

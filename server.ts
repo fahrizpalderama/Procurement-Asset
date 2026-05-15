@@ -1,6 +1,6 @@
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
+// Removed top-level vite import to optimize Vercel serverless functions
 import { google } from "googleapis";
 import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
@@ -13,13 +13,26 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
+// VERY IMPORTANT: Early health check for Vercel to diagnose if server even loads
+app.get("/api/health", (req, res) => {
+  res.json({ 
+    status: "ok", 
+    vercel: !!process.env.VERCEL,
+    timestamp: new Date().toISOString()
+  });
+});
+
 app.use(express.json());
 app.use(cookieParser());
 
 // In production (Vercel), only /tmp is writable.
 const uploadDir = process.env.VERCEL ? path.join(os.tmpdir(), "uploads") : "uploads";
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+try {
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+} catch (e) {
+  console.warn("Could not create uploads directory:", e);
 }
 const upload = multer({ dest: uploadDir });
 
@@ -197,17 +210,48 @@ async function ensureSheetExists(sheets: any, spreadsheetId: string, sheetName: 
 
 // --- AUTH ROUTES ---
 
+// Diagnostic endpoint to check configuration without exposing full secrets
+app.get("/api/auth/diagnostic", (req, res) => {
+  const diagnostic = {
+    env: {
+      GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID ? `Check! Starts with: ${process.env.GOOGLE_CLIENT_ID.substring(0, 10)}...` : "MISSING ❌",
+      GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET ? "Check! (Hidden)" : "MISSING ❌",
+      MASTER_SPREADSHEET_ID: process.env.MASTER_SPREADSHEET_ID ? "Check! (Available)" : "Empty (Dynamic Mode)",
+      VERCEL: process.env.VERCEL ? "Yes" : "No",
+      NODE_ENV: process.env.NODE_ENV,
+    },
+    url_detection: {
+      req_protocol: req.headers["x-forwarded-proto"] || req.protocol,
+      req_host: req.headers["x-forwarded-host"] || req.get("host"),
+      detected_app_url: getAppUrl(req),
+      detected_callback_uri: getCallbackUrl(req),
+    }
+  };
+  res.json(diagnostic);
+});
+
 app.get("/api/auth/url", (req, res) => {
   const dynamicCallbackUrl = getCallbackUrl(req);
   try {
     const clientId = (process.env.GOOGLE_CLIENT_ID || "").trim();
     const clientSecret = (process.env.GOOGLE_CLIENT_SECRET || "").trim();
 
-    if (!clientId || clientId.length < 10 || clientId.startsWith("YOUR_")) {
-      throw new Error(`GOOGLE_CLIENT_ID tidak ditemukan atau tidak valid. Pastikan sudah diatur di Vercel Environment Variables. (Nilai terdeteksi: ${clientId ? "Tersedia tapi mungkin salah" : "KOSONG"})`);
+    if (!clientId) {
+      throw new Error("GOOGLE_CLIENT_ID tidak ditemukan di Environment Variables.");
     }
-    if (!clientSecret || clientSecret.length < 5 || clientSecret.startsWith("YOUR_")) {
-      throw new Error(`GOOGLE_CLIENT_SECRET tidak ditemukan atau tidak valid. (Nilai terdeteksi: ${clientSecret ? "Tersedia" : "KOSONG"})`);
+    if (clientId.startsWith("YOUR_") || clientId === "MY_GOOGLE_CLIENT_ID") {
+      throw new Error("GOOGLE_CLIENT_ID masih menggunakan nilai placeholder. Ganti dengan Client ID asli dari Google Cloud Console.");
+    }
+    if (!clientSecret) {
+      throw new Error("GOOGLE_CLIENT_SECRET tidak ditemukan di Environment Variables.");
+    }
+    if (clientSecret.startsWith("YOUR_") || clientSecret === "MY_GOOGLE_CLIENT_SECRET") {
+      throw new Error("GOOGLE_CLIENT_SECRET masih menggunakan nilai placeholder. Ganti dengan Client Secret asli dari Google Cloud Console.");
+    }
+    
+    // Additional validation for Client ID format
+    if (!clientId.includes(".apps.googleusercontent.com")) {
+      throw new Error("Format GOOGLE_CLIENT_ID sepertinya salah. Biasanya berakhiran '.apps.googleusercontent.com'");
     }
     
     const dynamicClient = new google.auth.OAuth2(
@@ -957,29 +1001,42 @@ app.post("/api/sheets/delete", async (req, res) => {
 // --- VITE MIDDLEWARE ---
 
 async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
+  console.log(`[Server] Starting in ${process.env.NODE_ENV || 'development'} mode (VERCEL=${!!process.env.VERCEL})`);
+
+  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+    try {
+      const { createServer: createViteServer } = await import("vite");
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+      console.log("[Server] Vite middleware loaded (Development)");
+    } catch (e) {
+      console.error("[Server] Failed to load Vite:", e);
+    }
+  } else if (!process.env.VERCEL) {
+    // Only serve static files manually if NOT on Vercel. 
+    // Vercel uses vercel.json rewrites for static serving.
     const distPath = path.join(process.cwd(), "dist");
     if (fs.existsSync(distPath)) {
       app.use(express.static(distPath));
       app.get("*", (req, res) => {
         res.sendFile(path.join(distPath, "index.html"));
       });
+      console.log("[Server] Serving static files from", distPath);
     } else {
-      console.warn("Production: 'dist' folder not found. Only API routes will be available.");
+      console.warn("[Server] Production: 'dist' folder not found. Only API routes will be available.");
     }
   }
 
-  // Only listen if not on Vercel
+  // Only listen if not on Vercel (Vercel handles the server start automatically)
   if (!process.env.VERCEL) {
     app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on http://localhost:${PORT}`);
+      console.log(`[Server] Running on http://localhost:${PORT}`);
     });
+  } else {
+    console.log("[Server] Running as Vercel Serverless Function");
   }
 }
 
