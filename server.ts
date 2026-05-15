@@ -205,8 +205,12 @@ app.get("/api/auth/url", (req, res) => {
     console.log("Generated Auth URL with Redirect URI:", dynamicCallbackUrl);
     res.json({ url });
   } catch (error: any) {
+    const dynamicCallbackUrl = getCallbackUrl(req);
     console.error("Error generating auth URL:", error.message);
-    res.status(500).json({ error: "Failed to generate authentication URL", details: error.message });
+    res.status(500).json({ 
+      error: "Failed to generate authentication URL", 
+      details: `${error.message} (Redirect URI: ${dynamicCallbackUrl})` 
+    });
   }
 });
 
