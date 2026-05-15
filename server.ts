@@ -23,7 +23,7 @@ const getAppUrl = (req?: express.Request) => {
   }
   if (req) {
     const protocol = req.headers["x-forwarded-proto"] || req.protocol;
-    const host = req.get("host");
+    const host = req.headers["x-forwarded-host"] || req.get("host");
     if (host) return `${protocol}://${host}`;
   }
   if (process.env.VERCEL_URL) {
@@ -185,12 +185,12 @@ async function ensureSheetExists(sheets: any, spreadsheetId: string, sheetName: 
 // --- AUTH ROUTES ---
 
 app.get("/api/auth/url", (req, res) => {
+  const dynamicCallbackUrl = getCallbackUrl(req);
   try {
     if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-      throw new Error("Google OAuth credentials are not configured in environment variables.");
+      throw new Error("Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET");
     }
     
-    const dynamicCallbackUrl = getCallbackUrl(req);
     const dynamicClient = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
@@ -205,27 +205,31 @@ app.get("/api/auth/url", (req, res) => {
     console.log("Generated Auth URL with Redirect URI:", dynamicCallbackUrl);
     res.json({ url });
   } catch (error: any) {
-    const dynamicCallbackUrl = getCallbackUrl(req);
     console.error("Error generating auth URL:", error.message);
     res.status(500).json({ 
-      error: "Failed to generate authentication URL", 
-      details: `${error.message} (Redirect URI: ${dynamicCallbackUrl})` 
+      error: "Authentication Configuration Error", 
+      details: error.message,
+      required_callback_url: dynamicCallbackUrl
     });
   }
 });
 
 app.get(["/auth/callback", "/auth/callback/"], async (req, res) => {
   const { code, error } = req.query;
-  console.log("Auth Callback Received:", { code: code ? "PRESENT" : "MISSING", error });
+  const dynamicCallbackUrl = getCallbackUrl(req);
+  console.log("Auth Callback Received:", { code: code ? "PRESENT" : "MISSING", error, redirect_uri: dynamicCallbackUrl });
 
   if (error) {
     console.error("OAuth error from Google:", error);
     return res.status(400).send(`Authentication failed: ${error}`);
   }
 
+  const codeStr = code as string;
+  if (!codeStr) {
+    return res.status(400).send("Missing authorization code");
+  }
+
   try {
-    const codeStr = code as string;
-    const dynamicCallbackUrl = getCallbackUrl(req);
     console.log("Starting token exchange using Redirect URI:", dynamicCallbackUrl);
     
     const exchangeClient = new google.auth.OAuth2(
