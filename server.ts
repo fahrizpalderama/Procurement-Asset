@@ -17,11 +17,30 @@ app.use(cookieParser());
 
 const upload = multer({ dest: "uploads/" });
 
+const getAppUrl = () => {
+  if (process.env.APP_URL) {
+    return process.env.APP_URL.replace(/\/$/, "");
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+  return "http://localhost:3000";
+};
+
+const APP_URL = getAppUrl();
+const CALLBACK_URL = `${APP_URL}/auth/callback`;
+
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
-  `${process.env.APP_URL || 'http://localhost:3000'}/auth/callback`
+  CALLBACK_URL
 );
+
+console.log("Auth System Initialized:");
+console.log("- GOOGLE_CLIENT_ID:", process.env.GOOGLE_CLIENT_ID ? "PRESENT" : "MISSING");
+console.log("- GOOGLE_CLIENT_SECRET:", process.env.GOOGLE_CLIENT_SECRET ? "PRESENT" : "MISSING");
+console.log("- APP_URL:", APP_URL);
+console.log("- CALLBACK_URL:", CALLBACK_URL);
 
 // Scopes for Google Sheets and profile
 const SCOPES = [
@@ -36,7 +55,7 @@ const getAuthorizedClient = (tokens: any) => {
   const client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    `${process.env.APP_URL || 'http://localhost:3000'}/auth/callback`
+    CALLBACK_URL
   );
   client.setCredentials(tokens);
   return client;
@@ -62,7 +81,11 @@ const getMasterSpreadsheetId = () => {
 };
 
 const setMasterSpreadsheetId = (id: string) => {
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify({ masterSpreadsheetId: id }));
+  try {
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify({ masterSpreadsheetId: id }));
+  } catch (e) {
+    console.warn("Could not save masterSpreadsheetId to config.json (likely read-only filesystem):", e);
+  }
 };
 
 async function getOrCreateMasterSpreadsheet(auth: any) {
@@ -153,19 +176,51 @@ async function ensureSheetExists(sheets: any, spreadsheetId: string, sheetName: 
 // --- AUTH ROUTES ---
 
 app.get("/api/auth/url", (req, res) => {
-  const url = oauth2Client.generateAuthUrl({
-    access_type: "offline",
-    scope: SCOPES,
-    prompt: "consent"
-  });
-  res.json({ url });
+  try {
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+      throw new Error("Google OAuth credentials are not configured in environment variables.");
+    }
+    const url = oauth2Client.generateAuthUrl({
+      access_type: "offline",
+      scope: SCOPES,
+      prompt: "consent"
+    });
+    console.log("Generated Auth URL:", url);
+    res.json({ url });
+  } catch (error: any) {
+    console.error("Error generating auth URL:", error.message);
+    res.status(500).json({ error: "Failed to generate authentication URL", details: error.message });
+  }
 });
 
 app.get(["/auth/callback", "/auth/callback/"], async (req, res) => {
-  const { code } = req.query;
+  const { code, error } = req.query;
+  console.log("Auth Callback Received:", { code: code ? "PRESENT" : "MISSING", error });
+
+  if (error) {
+    console.error("OAuth error from Google:", error);
+    return res.status(400).send(`Authentication failed: ${error}`);
+  }
+
   try {
-    const { tokens } = await oauth2Client.getToken(code as string);
+    const codeStr = code as string;
+    console.log("Starting token exchange for code:", codeStr.substring(0, 10) + "...");
+    console.log("Current CALLBACK_URL configured in oauth2Client:", CALLBACK_URL);
     
+    // Create a fresh client for exchange to ensure state integrity
+    const exchangeClient = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      CALLBACK_URL
+    );
+
+    const { tokens } = await exchangeClient.getToken(codeStr);
+    console.log("Tokens received successfully. Keys:", Object.keys(tokens));
+    
+    if (!tokens) {
+      throw new Error("Google returned an empty token response");
+    }
+
     // Set tokens in a secure cookie
     res.cookie("google_tokens", JSON.stringify(tokens), {
       httpOnly: true,
@@ -173,6 +228,10 @@ app.get(["/auth/callback", "/auth/callback/"], async (req, res) => {
       sameSite: "none",
       maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
     });
+
+    console.log("Successfully set auth cookie for user");
+
+    console.log("Auth cookie set, sending success script");
 
     res.send(`
       <html>
@@ -192,15 +251,35 @@ app.get(["/auth/callback", "/auth/callback/"], async (req, res) => {
         </body>
       </html>
     `);
-  } catch (error) {
-    console.error("Error exchanging code:", error);
-    res.status(500).send("Authentication failed");
+  } catch (error: any) {
+    console.error("Critical Token Exchange Failure:", error.response?.data || error.message);
+    res.status(500).send(`
+      <html>
+        <body style="font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #fff1f2;">
+          <div style="text-align: center; padding: 2.5rem; background: white; border-radius: 12px; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1); border: 2px solid #fecaca; max-width: 500px;">
+            <h1 style="color: #991b1b; margin-bottom: 0.5rem; font-size: 1.5rem;">Autentikasi Gagal</h1>
+            <p style="color: #4b5563; margin-bottom: 1.5rem;">Terjadi kesalahan saat memvalidasi kode akses dari Google.</p>
+            <div style="background: #f8fafc; padding: 1rem; border-radius: 6px; text-align: left; margin-bottom: 1.5rem; border: 1px solid #e2e8f0;">
+              <p style="font-family: monospace; font-size: 12px; color: #64748b; margin: 0; word-break: break-all;">
+                Error: ${error.message}
+              </p>
+            </div>
+            <button onclick="window.close()" style="background: #ef4444; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 6px; font-weight: 600; cursor: pointer;">
+              Tutup Jendela
+            </button>
+          </div>
+        </body>
+      </html>
+    `);
   }
 });
 
 app.get("/api/auth/status", async (req, res) => {
   const tokensStr = req.cookies.google_tokens;
-  if (!tokensStr) return res.json({ isAuthenticated: false });
+  if (!tokensStr) {
+    console.log("Auth Status Check: No tokens cookie found");
+    return res.json({ isAuthenticated: false });
+  }
 
   try {
     const tokens = JSON.parse(tokensStr);
@@ -209,7 +288,12 @@ app.get("/api/auth/status", async (req, res) => {
     const userInfo = await oauth2.userinfo.get();
     
     const email = userInfo.data.email;
-    if (!email) throw new Error("Email not found");
+    if (!email) {
+      console.error("Auth Status Check: Email missing in userinfo");
+      throw new Error("Email not found");
+    }
+
+    console.log("Auth Status Check: Success for", email);
 
     let role: 'ADMIN' | 'USER' | 'UNAUTHORIZED' = 'UNAUTHORIZED';
 
@@ -812,9 +896,14 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  // Only listen if not on Vercel
+  if (!process.env.VERCEL) {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  }
 }
 
 startServer();
+
+export default app;

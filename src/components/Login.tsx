@@ -22,8 +22,10 @@ export default function Login() {
         alert("Silakan aktifkan popup untuk melanjutkan login.");
         setLoading(false);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Auth error", error);
+      const msg = error.response?.data?.details || error.message || "Gagal menghubungi server autentikasi";
+      alert(`Login Error: ${msg}\n\nPastikan GOOGLE_CLIENT_ID dan GOOGLE_CLIENT_SECRET sudah dikonfigurasi di Settings > Secrets.`);
       setLoading(false);
     }
   };
