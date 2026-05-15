@@ -9,7 +9,7 @@ export default function App() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const { data } = await axios.get("/api/auth/status");
+        const { data } = await axios.get("/api/auth/status", { withCredentials: true });
         setAuthStatus(data);
       } catch (error) {
         setAuthStatus({ isAuthenticated: false });

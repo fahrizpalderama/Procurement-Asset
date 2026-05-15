@@ -1,6 +1,6 @@
 {
-  "name": "Sistem Pengadaan Barang",
-  "description": "Aplikasi form pengadaan barang fungsional dengan integrasi Google Sheets.",
+  "name": "Sebelas Procurement Form",
+  "description": "Formulir pengadaan barang eksklusif untuk Sebelas dengan integrasi Google Sheets.",
   "requestFramePermissions": [
     "camera",
     "microphone"

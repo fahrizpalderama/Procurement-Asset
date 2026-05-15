@@ -33,6 +33,7 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<"inventaris" | "disetujui" | "ditolak">("inventaris");
   const [uploading, setUploading] = useState(false);
   const [uploadedPhotoUrl, setUploadedPhotoUrl] = useState("");
+  const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
   const [deleteConfirmItem, setDeleteConfirmItem] = useState<ProcurementItem | null>(null);
   const [verifyItem, setVerifyItem] = useState<{ item: ProcurementItem, status: 'APPROVED' | 'REJECTED' } | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
@@ -44,12 +45,25 @@ export default function Dashboard() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const { data } = await axios.get("/api/sheets/data");
+      const { data } = await axios.get("/api/sheets/data", { withCredentials: true });
       // Normalize photo URLs
-      const normalizedItems = data.items.map((item: ProcurementItem) => ({
-        ...item,
-        refPhoto: normalizeDriveUrl(item.refPhoto)
-      }));
+      const normalizedItems = data.items.map((item: ProcurementItem) => {
+        // Log for debugging (only for non-empty photos)
+        if (item.refPhoto && item.refPhoto.length > 5) {
+          console.log(`Item ${item.id} has photo: ${item.refPhoto.substring(0, 30)}...`);
+        }
+        
+        let photo = item.refPhoto || "";
+        // Catch common "bad" string values
+        if (photo === "undefined" || photo === "null" || photo === "[object Object]") {
+          photo = "";
+        }
+
+        return {
+          ...item,
+          refPhoto: normalizeDriveUrl(photo)
+        };
+      });
       setItems(normalizedItems);
       setSpreadsheetId(data.spreadsheetId);
     } catch (error) {
@@ -75,6 +89,11 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchData();
+    // Clear form on mount/refresh
+    setEditingItem(null);
+    setFormFields({ quantity: 0, price: 0 });
+    setUploadedPhotoUrl("");
+    setLocalPreviewUrl(null);
   }, []);
 
   useEffect(() => {
@@ -84,9 +103,11 @@ export default function Dashboard() {
         price: Number(editingItem.price)
       });
       setUploadedPhotoUrl(editingItem.refPhoto || "");
+      setLocalPreviewUrl(null);
     } else {
       setFormFields({ quantity: 0, price: 0 });
       setUploadedPhotoUrl("");
+      setLocalPreviewUrl(null);
     }
   }, [editingItem]);
 
@@ -94,6 +115,10 @@ export default function Dashboard() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Create local preview
+    const localUrl = URL.createObjectURL(file);
+    setLocalPreviewUrl(localUrl);
+    
     setUploading(true);
     
     try {
@@ -110,12 +135,20 @@ export default function Dashboard() {
       formData.append("file", compressedFile);
 
       const { data } = await axios.post("/api/upload", formData, {
-        headers: { "Content-Type": "multipart/form-data" }
+        headers: { "Content-Type": "multipart/form-data" },
+        withCredentials: true
       });
-      setUploadedPhotoUrl(normalizeDriveUrl(data.url));
-    } catch (error) {
-      console.error("Upload error", error);
-      alert("Gagal mengunggah foto");
+      
+      if (data && data.url) {
+        setUploadedPhotoUrl(normalizeDriveUrl(data.url));
+      } else {
+        console.error("Upload response missing URL:", data);
+        throw new Error("Invalid response from server: URL missing");
+      }
+    } catch (error: any) {
+      console.error("Upload error details:", error.response?.data || error.message);
+      alert(`Gagal mengunggah foto: ${error.response?.data?.error || error.message}`);
+      // If upload fails, we might want to keep the local preview or clear it
     } finally {
       setUploading(false);
     }
@@ -124,11 +157,12 @@ export default function Dashboard() {
   const handleDeletePhoto = () => {
     if (confirm("Hapus lampiran foto ini?")) {
       setUploadedPhotoUrl("");
+      setLocalPreviewUrl(null);
     }
   };
 
   const handleLogout = async () => {
-    await axios.post("/api/auth/logout");
+    await axios.post("/api/auth/logout", {}, { withCredentials: true });
     window.location.reload();
   };
 
@@ -144,7 +178,7 @@ export default function Dashboard() {
         id: item.id,
         rowIndex: item.rowIndex, 
         photoUrl: item.refPhoto 
-      });
+      }, { withCredentials: true });
       
       if (response.data.success) {
         console.log("Delete successful");
@@ -186,6 +220,7 @@ export default function Dashboard() {
       unit: formData.get("unit") as string,
       price: price,
       totalPrice: qty * price,
+      storeLocation: formData.get("storeLocation") as string,
       status: formData.get("status") as string,
       requester: formData.get("requester") as string,
       description: formData.get("description") as string,
@@ -203,16 +238,23 @@ export default function Dashboard() {
           spreadsheetId,
           rowIndex: editingItem.rowIndex,
           item: itemData
-        });
+        }, { withCredentials: true });
       } else {
         await axios.post("/api/sheets/add", {
           spreadsheetId,
           item: itemData
-        });
+        }, { withCredentials: true });
       }
       setIsFormOpen(false);
       setEditingItem(null);
-      fetchData();
+      // Ensure state is fully reset
+      setFormFields({ quantity: 0, price: 0 });
+      setUploadedPhotoUrl("");
+      setLocalPreviewUrl(null);
+      if (e.currentTarget) {
+        e.currentTarget.reset();
+      }
+      await fetchData();
     } catch (error) {
       alert("Gagal menyimpan");
     }
@@ -250,7 +292,7 @@ export default function Dashboard() {
         status: verifyItem.status,
         reason,
         verifier
-      });
+      }, { withCredentials: true });
       setVerifyItem(null);
     } catch (error) {
       console.error("Verification failed", error);
@@ -285,15 +327,21 @@ export default function Dashboard() {
       {/* Header Section */}
       <header className="h-20 flex items-center justify-between px-8 bg-white border-b border-zinc-100 shrink-0">
         <div className="flex items-center gap-10">
-          <div className="flex items-center gap-3">
-            <div className="bg-black p-2.5 rounded-xl shadow-lg shadow-black/10 flex items-center justify-center">
-              <FileSpreadsheet className="w-5 h-5 text-white" />
+          <div className="flex items-center gap-3 group">
+            <div className="bg-black p-2.5 rounded-xl shadow-lg shadow-black/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <div className="relative w-5 h-5 flex items-center justify-center">
+                <div className="absolute left-0 top-0 w-1 h-3 bg-white rounded-full"></div>
+                <div className="absolute left-1.5 top-0 w-1 h-3 bg-white rounded-full"></div>
+                <div className="absolute w-6 h-1 bg-white rounded-full rotate-[135deg]"></div>
+                <div className="absolute right-0 bottom-0 w-1 h-3 bg-white rounded-full"></div>
+                <div className="absolute right-1.5 bottom-0 w-1 h-3 bg-white rounded-full"></div>
+              </div>
             </div>
             <div className="flex flex-col">
-              <h1 className="text-xl font-display font-bold tracking-tight leading-none">
-                PROCURE<span className="text-zinc-400">.SYNC</span>
+              <h1 className="text-xl font-display font-black tracking-tighter leading-none uppercase">
+                SEBELAS<span className="text-zinc-400">.FORM</span>
               </h1>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 mt-0.5">Pusat Kontrol</span>
+              <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-zinc-400 mt-0.5">Procurement System</span>
             </div>
           </div>
           
@@ -454,9 +502,12 @@ export default function Dashboard() {
 
                       <div className="flex-1 flex flex-col sm:flex-row items-start sm:items-center gap-6">
                         <div className="w-full sm:w-28 shrink-0 flex sm:flex-col items-center sm:items-start justify-between sm:justify-center gap-2">
-                          <div>
-                            <div className="text-[11px] font-bold text-zinc-300 uppercase tracking-widest mb-1">{item.timestamp?.split(',')[0]}</div>
-                            <div className="text-xs font-bold text-zinc-900">{item.timestamp?.split(',')[1]}</div>
+                          <div className="space-y-1">
+                            <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Waktu Pengadaan</div>
+                            <div className="text-[11px] font-bold text-zinc-300 uppercase tracking-widest leading-none">{item.timestamp?.split(',')[0]}</div>
+                            <div className="text-xs font-bold text-zinc-900 leading-none">
+                              {item.timestamp?.split(',')[1]?.trim().split(/[.:]/).slice(0, 2).join(':')}
+                            </div>
                           </div>
                           {item.verificationStatus === 'PENDING' && (
                             <div className="flex gap-2">
@@ -496,6 +547,12 @@ export default function Dashboard() {
                                <Package className="w-3.5 h-3.5 text-zinc-400" />
                                <span className="text-xs font-bold">{item.quantity}</span>
                              </div>
+                             {item.storeLocation && (
+                               <div className="flex items-center gap-2 bg-zinc-50 px-3 py-1 rounded-lg border border-zinc-100">
+                                 <span className="text-[10px] font-bold text-zinc-400 uppercase">Lokasi:</span>
+                                 <span className="text-[10px] font-bold uppercase truncate max-w-[100px]">{item.storeLocation}</span>
+                               </div>
+                             )}
                              <div className="flex items-center gap-2 bg-zinc-50 px-3 py-1 rounded-lg border border-zinc-100">
                                <span className="text-[10px] font-bold text-zinc-400 uppercase">Prioritas:</span>
                                <span className={`text-[10px] font-bold uppercase tracking-wider ${item.status.includes('Urgent') || item.status.includes('Mendesak') ? 'text-red-500' : 'text-zinc-600'}`}>
@@ -576,7 +633,7 @@ export default function Dashboard() {
               <p className="text-sm font-medium text-zinc-400 mt-2">Lengkapi detail pengadaan logistik di bawah ini.</p>
             </div>
 
-            <form onSubmit={handleAddOrUpdate} className="space-y-8">
+            <form key={editingItem?.id || "new"} onSubmit={handleAddOrUpdate} className="space-y-8" autoComplete="off">
               {editingItem && (
                 <div className="space-y-3">
                   <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest block ml-1">ID Unik</label>
@@ -629,6 +686,16 @@ export default function Dashboard() {
                   onChange={(e) => setFormFields(prev => ({ ...prev, price: Number(e.target.value) || 0 }))}
                   required
                   className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm focus:bg-white focus:border-black outline-none transition-all"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest block ml-1">Lokasi Store</label>
+                <input 
+                  name="storeLocation"
+                  defaultValue={editingItem?.storeLocation}
+                  placeholder="Nama toko atau lokasi..."
+                  className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm focus:bg-white focus:border-black outline-none transition-all placeholder:text-zinc-300"
                 />
               </div>
 
@@ -693,7 +760,7 @@ export default function Dashboard() {
                 </div>
                 <div className="space-y-3">
                   <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest block ml-1">Lampiran</label>
-                  {!uploadedPhotoUrl ? (
+                  {(!uploadedPhotoUrl && !localPreviewUrl) ? (
                     <div className="relative h-[54px]">
                       <input 
                         type="file"
@@ -713,19 +780,24 @@ export default function Dashboard() {
                           <Camera className="w-4 h-4 text-zinc-400 group-hover:text-black transition-colors" />
                         )}
                         <span className="text-xs font-bold text-zinc-400 group-hover:text-black">
-                          {uploading ? "Sinking..." : "Lampirkan"}
+                          {uploading ? "Uploading..." : "Lampirkan"}
                         </span>
                       </label>
                     </div>
                   ) : (
                     <div className="relative group border border-zinc-100 rounded-[20px] h-[54px] overflow-hidden cursor-zoom-in">
                        <img 
-                        src={uploadedPhotoUrl} 
+                        src={localPreviewUrl || uploadedPhotoUrl} 
                         alt="Preview" 
                         referrerPolicy="no-referrer"
-                        className="w-full h-full object-cover transition-all"
-                        onClick={() => setPreviewImageUrl(uploadedPhotoUrl)}
+                        className={`w-full h-full object-cover transition-all ${uploading ? 'opacity-50 grayscale' : ''}`}
+                        onClick={() => setPreviewImageUrl(localPreviewUrl || uploadedPhotoUrl)}
                       />
+                      {uploading && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <RefreshCw className="w-5 h-5 animate-spin text-white drop-shadow-md" />
+                        </div>
+                      )}
                       <div className="absolute inset-0 bg-black/80 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                          <button type="button" onClick={handleDeletePhoto} className="p-2 bg-red-500 rounded-full text-white hover:scale-110 transition-transform">
                            <X className="w-4 h-4" />
@@ -775,12 +847,12 @@ export default function Dashboard() {
       {/* Footer Info */}
       <footer className="h-10 bg-white border-t border-zinc-100 flex items-center justify-between px-8 shrink-0">
         <div className="flex gap-6">
-          <span className="text-[10px] font-bold text-zinc-300 uppercase tracking-widest">ProcureSync Engine v2.4</span>
-          <span className="hidden sm:inline text-[10px] font-bold text-zinc-300 uppercase tracking-widest">Aktif: 99.9%</span>
+          <span className="text-[10px] font-bold text-zinc-300 uppercase tracking-widest">Sebelas Engine v3.0</span>
+          <span className="hidden sm:inline text-[10px] font-bold text-zinc-300 uppercase tracking-widest">Verified Assets</span>
         </div>
         <div className="flex gap-2 items-center">
-          <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-          <span className="text-[10px] font-bold text-zinc-300 uppercase tracking-widest">Sesi Terenkripsi</span>
+          <div className="w-1.5 h-1.5 bg-zinc-900 rounded-full animate-pulse" />
+          <span className="text-[10px] font-bold text-zinc-300 uppercase tracking-widest">Secure Handshake</span>
         </div>
       </footer>
 
@@ -810,7 +882,7 @@ export default function Dashboard() {
                 <p className="text-sm font-medium text-zinc-400 mt-1">Lengkapi form pengadaan di bawah.</p>
               </div>
               
-              <form onSubmit={handleAddOrUpdate} className="grid grid-cols-1 gap-6">
+              <form key={editingItem?.id || "mobile-new"} onSubmit={handleAddOrUpdate} className="grid grid-cols-1 gap-6" autoComplete="off">
                 {editingItem && (
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">ID Unik</label>
@@ -850,6 +922,16 @@ export default function Dashboard() {
                     defaultValue={editingItem?.price} 
                     onChange={(e) => setFormFields(prev => ({ ...prev, price: Number(e.target.value) || 0 }))} 
                     required 
+                    className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all" 
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Lokasi Store</label>
+                  <input 
+                    name="storeLocation" 
+                    defaultValue={editingItem?.storeLocation} 
+                    placeholder="Nama toko..."
                     className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all" 
                   />
                 </div>
@@ -898,21 +980,26 @@ export default function Dashboard() {
 
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Lampiran Visual</label>
-                  {!uploadedPhotoUrl ? (
-                    <label className="w-full border-2 border-dashed border-zinc-100 aspect-video rounded-[32px] flex flex-col items-center justify-center gap-3 bg-zinc-50 active:bg-zinc-100 transition-colors">
-                      <input type="file" accept="image/*" capture="environment" onChange={handleFileUpload} className="hidden" />
+                  {(!uploadedPhotoUrl && !localPreviewUrl) ? (
+                    <label htmlFor="photo-upload-mobile" className="w-full border-2 border-dashed border-zinc-100 aspect-video rounded-[32px] flex flex-col items-center justify-center gap-3 bg-zinc-50 active:bg-zinc-100 transition-colors cursor-pointer">
+                      <input id="photo-upload-mobile" type="file" accept="image/*" capture="environment" onChange={handleFileUpload} className="hidden" />
                       {uploading ? <RefreshCw className="w-8 h-8 animate-spin text-black" /> : <Camera className="w-8 h-8 text-zinc-300" />}
                       <span className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">Ambil Foto</span>
                     </label>
                   ) : (
                     <div className="relative aspect-video bg-zinc-100 rounded-[32px] overflow-hidden cursor-zoom-in group">
                       <img 
-                        src={uploadedPhotoUrl} 
+                        src={localPreviewUrl || uploadedPhotoUrl} 
                         alt="Pratinjau" 
                         referrerPolicy="no-referrer"
-                        className="w-full h-full object-cover" 
-                        onClick={() => setPreviewImageUrl(uploadedPhotoUrl)}
+                        className={`w-full h-full object-cover ${uploading ? 'opacity-50 grayscale' : ''}`} 
+                        onClick={() => setPreviewImageUrl(localPreviewUrl || uploadedPhotoUrl)}
                       />
+                      {uploading && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <RefreshCw className="w-10 h-10 animate-spin text-white drop-shadow-lg" />
+                        </div>
+                      )}
                       <button type="button" onClick={handleDeletePhoto} className="absolute top-4 right-4 bg-red-500 p-3 rounded-full text-white shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"><X className="w-5 h-5" /></button>
                     </div>
                   )}

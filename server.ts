@@ -105,7 +105,7 @@ app.post("/api/auth/logout", (req, res) => {
 // --- GOOGLE SHEETS PROXY ---
 
 const SPREADSHEET_NAME = "Procurement_Data_App";
-const PHOTOS_FOLDER_ID = "1VpOL3N0y-CNRy48xbQ5QHGB5l-c-7sqk";
+const PHOTOS_FOLDER_NAME = "Procurement_Photos";
 
 app.post("/api/upload", upload.single("file"), async (req, res) => {
   const tokensStr = req.cookies.google_tokens;
@@ -117,15 +117,32 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
     const auth = getAuthorizedClient(tokens);
     const drive = google.drive({ version: "v3", auth });
 
-    const fileMetadata: any = {
-      name: `Photo_${Date.now()}_${req.file.originalname}`,
-    };
-    
-    // Only add parent if folder ID is likely valid and intended
-    if (PHOTOS_FOLDER_ID && PHOTOS_FOLDER_ID.length > 10) {
-      fileMetadata.parents = [PHOTOS_FOLDER_ID];
+    // 1. Find or create photos folder
+    let folderId = "";
+    const folderResp = await drive.files.list({
+      q: `name = '${PHOTOS_FOLDER_NAME}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+      fields: "files(id, name)",
+    });
+
+    if (folderResp.data.files && folderResp.data.files.length > 0) {
+      folderId = folderResp.data.files[0].id!;
+    } else {
+      const folderMetadata = {
+        name: PHOTOS_FOLDER_NAME,
+        mimeType: "application/vnd.google-apps.folder",
+      };
+      const folder = await drive.files.create({
+        requestBody: folderMetadata,
+        fields: "id",
+      });
+      folderId = folder.data.id!;
     }
 
+    const fileMetadata: any = {
+      name: `Photo_${Date.now()}_${req.file.originalname}`,
+      parents: [folderId],
+    };
+    
     const media = {
       mimeType: req.file.mimetype,
       body: fs.createReadStream(req.file.path),
@@ -137,8 +154,12 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
       fields: "id, webViewLink, webContentLink",
     });
 
+    if (!file.data || !file.data.id) {
+      console.error("Drive file creation succeeded but returned no ID:", file.data);
+      throw new Error("Failed to get file ID from Google Drive");
+    }
+
     // Optional: Make file readable by anyone if the domain allows it
-    // Non-fatal if domain policies prevent public sharing
     try {
       await drive.permissions.create({
         fileId: file.data.id!,
@@ -219,10 +240,10 @@ app.get("/api/sheets/data", async (req, res) => {
       // Initialize headers
       await sheets.spreadsheets.values.update({
         spreadsheetId,
-        range: "Procurement!A1:O1",
+        range: "Procurement!A1:P1",
         valueInputOption: "RAW",
         requestBody: {
-          values: [["ID", "Nama Barang", "Kuantitas", "Satuan", "Harga Satuan", "Total Harga", "Status Urgensi", "Pemohon", "Deskripsi", "Referensi Link", "Referensi Foto", "Waktu Pengajuan", "Status Verifikasi", "Alasan Verifikasi", "Verifikator"]]
+          values: [["ID", "Timestamp", "Nama Barang", "Kuantitas", "Satuan", "Harga Satuan", "Harga Total", "Lokasi Store", "Prioritas", "Pemohon", "Deskripsi", "Link Referensi", "Foto Referensi", "Persetujuan", "Deskripsi Persetujuan", "Verifikator"]]
         }
       });
     }
@@ -230,12 +251,12 @@ app.get("/api/sheets/data", async (req, res) => {
     // 2. Read data
     const dataResp = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: "Procurement!A2:O1000",
+      range: "Procurement!A2:P1000",
     });
 
     const rows = dataResp.data.values || [];
     const items = rows.map((row, index) => {
-      let vStatus = row[12] || "PENDING";
+      let vStatus = row[13] || "PENDING";
       // Legacy support for boolean-like strings
       if (vStatus === "TRUE") vStatus = "APPROVED";
       if (vStatus === "FALSE") vStatus = "PENDING";
@@ -243,20 +264,21 @@ app.get("/api/sheets/data", async (req, res) => {
       return {
         rowIndex: index + 2, // Spreadsheet row index for updates/deletes
         id: row[0],
-        name: row[1] || "",
-        quantity: row[2] || 0,
-        unit: row[3] || "",
-        price: row[4] || 0,
-        totalPrice: row[5] || 0,
-        status: row[6] || "Penting (5x24 Jam)",
-        requester: row[7] || "",
-        description: row[8] || "",
-        refLink: row[9] || "",
-        refPhoto: row[10] || "",
-        timestamp: row[11] || "",
+        timestamp: row[1] || "",
+        name: row[2] || "",
+        quantity: row[3] || 0,
+        unit: row[4] || "",
+        price: row[5] || 0,
+        totalPrice: row[6] || 0,
+        storeLocation: row[7] || "",
+        status: row[8] || "Penting (5x24 Jam)",
+        requester: row[9] || "",
+        description: row[10] || "",
+        refLink: row[11] || "",
+        refPhoto: row[12] || "",
         verificationStatus: vStatus,
-        verificationReason: row[13] || "",
-        verifierName: row[14] || ""
+        verificationReason: row[14] || "",
+        verifierName: row[15] || ""
       };
     }).filter(item => item.id); // Filter out empty rows but keep original rowIndex
 
@@ -281,22 +303,23 @@ app.post("/api/sheets/add", async (req, res) => {
 
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: "Procurement!A:O",
+      range: "Procurement!A:P",
       valueInputOption: "RAW",
       requestBody: {
         values: [[
-          Date.now().toString(),
+          `ITEM-${Date.now()}`,
+          timestamp,
           item.name,
           item.quantity,
           item.unit,
           item.price,
           item.totalPrice,
+          item.storeLocation,
           item.status,
           item.requester,
           item.description,
           item.refLink,
           item.refPhoto,
-          timestamp,
           "PENDING",
           "",
           ""
@@ -323,22 +346,23 @@ app.post("/api/sheets/update", async (req, res) => {
   
       await sheets.spreadsheets.values.update({
         spreadsheetId,
-        range: `Procurement!A${rowIndex}:O${rowIndex}`,
+        range: `Procurement!A${rowIndex}:P${rowIndex}`,
         valueInputOption: "RAW",
         requestBody: {
           values: [[
             item.id,
+            item.timestamp || "",
             item.name,
             item.quantity,
             item.unit,
             item.price,
             item.totalPrice,
+            item.storeLocation,
             item.status,
             item.requester,
             item.description,
             item.refLink,
             item.refPhoto,
-            item.timestamp || "",
             item.verificationStatus || "PENDING",
             item.verificationReason || "",
             item.verifierName || ""
@@ -365,7 +389,7 @@ app.post("/api/sheets/verify", async (req, res) => {
 
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: `Procurement!M${rowIndex}:O${rowIndex}`,
+      range: `Procurement!N${rowIndex}:P${rowIndex}`,
       valueInputOption: "RAW",
       requestBody: {
         values: [[status, reason, verifier]]
@@ -434,17 +458,24 @@ app.post("/api/sheets/delete", async (req, res) => {
     // Remember rowIndex is 1-based, and Procurement!A:A includes header at index 0.
     // So row 2 is index 1.
     const currentIdAtRow = allIds[rowIndexToDelete - 1]?.[0];
+    
+    // Use string conversion and trim for robust comparison
+    const normalizedTargetId = String(id).trim();
+    const normalizedFoundId = currentIdAtRow ? String(currentIdAtRow).trim() : "";
 
-    if (currentIdAtRow !== id) {
-      console.warn(`ID mismatch at row ${rowIndexToDelete}: Expected ${id}, Found ${currentIdAtRow}. Searching for ID...`);
-      // If it doesn't match, search for the ID
-      const foundIndex = allIds.findIndex(row => row[0] === id);
+    if (normalizedFoundId !== normalizedTargetId) {
+      console.warn(`ID mismatch at row ${rowIndexToDelete}: Expected "${normalizedTargetId}", Found "${normalizedFoundId}". Searching for ID in all rows...`);
+      // If it doesn't match, search for the ID in the entire column A
+      const foundIndex = allIds.findIndex(row => row[0] && String(row[0]).trim() === normalizedTargetId);
       if (foundIndex === -1) {
-        console.error(`Item ID ${id} not found in sheet. Aborting delete.`);
-        return res.status(404).json({ error: "Item not found in database" });
+        console.error(`Item ID "${normalizedTargetId}" not found in sheet column A. Column A values:`, allIds.flat().slice(0, 50));
+        return res.status(404).json({ 
+          error: "Item not found in database", 
+          detail: `ID "${normalizedTargetId}" could not be located in the spreadsheet.` 
+        });
       }
       rowIndexToDelete = foundIndex + 1; // Convert back to 1-based row index
-      console.log(`Found item ID ${id} at row ${rowIndexToDelete}. Proceeding with delete.`);
+      console.log(`Found item ID "${normalizedTargetId}" at row ${rowIndexToDelete}. Proceeding with delete.`);
     }
 
     // 2. Delete row from Sheet

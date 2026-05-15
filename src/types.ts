@@ -6,6 +6,7 @@ export interface ProcurementItem {
   price: number | string;
   totalPrice: number | string;
   status: string;
+  storeLocation: string;
   requester: string;
   description: string;
   refLink: string;

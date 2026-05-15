@@ -1,3 +1,13 @@
+/* --- NORMALIZE NUMBER INPUTS --- */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Outfit:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap');
 @import "tailwindcss";
 

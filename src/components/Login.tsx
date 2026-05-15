@@ -15,7 +15,7 @@ export default function Login() {
   const handleLogin = async () => {
     setLoading(true);
     try {
-      const { data } = await axios.get("/api/auth/url");
+      const { data } = await axios.get("/api/auth/url", { withCredentials: true });
       const authWindow = window.open(data.url, "google_auth", "width=600,height=700");
       
       if (!authWindow) {
@@ -49,29 +49,39 @@ export default function Login() {
         <div className="flex-1 bg-zinc-50 p-12 flex flex-col items-center justify-center text-center relative group">
           <div className="absolute top-8 left-8 flex items-center gap-2">
             <div className="bg-black text-white p-1.5 rounded-lg">
-              <FileSpreadsheet className="w-4 h-4" />
+              <div className="relative w-4 h-4 flex items-center justify-center">
+                <div className="absolute left-0 top-0 w-0.5 h-2 bg-white rounded-full"></div>
+                <div className="absolute left-1 top-0 w-0.5 h-2 bg-white rounded-full"></div>
+                <div className="absolute w-4 h-0.5 bg-white rounded-full rotate-[135deg]"></div>
+                <div className="absolute right-0 bottom-0 w-0.5 h-2 bg-white rounded-full"></div>
+                <div className="absolute right-1 bottom-0 w-0.5 h-2 bg-white rounded-full"></div>
+              </div>
             </div>
-            <span className="font-display font-bold tracking-tight text-sm">PROCURE.SYNC</span>
+            <span className="font-display font-black tracking-tighter text-sm uppercase">SEBELAS.FORM</span>
           </div>
 
           <div className="mb-12 relative">
             <div className="w-64 h-64 bg-white rounded-full flex items-center justify-center relative z-10 shadow-sm border border-zinc-100">
-              <div className="relative">
-                <Cloud className="w-24 h-24 text-zinc-100 absolute -top-4 -right-4" />
+              <div className="relative scale-150">
                 <motion.div
                   animate={{ 
-                    y: [0, -10, 0],
+                    rotate: [0, 5, 0, -5, 0],
                   }}
                   transition={{ 
-                    duration: 4,
+                    duration: 6,
                     repeat: Infinity,
                     ease: "easeInOut"
                   }}
+                  className="relative w-24 h-24 flex items-center justify-center"
                 >
-                  <FileSpreadsheet className="w-32 h-32 text-black" />
+                  <div className="absolute left-4 top-4 w-4 h-12 bg-black rounded-full shadow-sm"></div>
+                  <div className="absolute left-10 top-4 w-4 h-12 bg-black rounded-full shadow-sm"></div>
+                  <div className="absolute w-28 h-4 bg-black rounded-full rotate-[135deg] shadow-sm"></div>
+                  <div className="absolute right-4 bottom-4 w-4 h-12 bg-black rounded-full shadow-sm"></div>
+                  <div className="absolute right-10 bottom-4 w-4 h-12 bg-black rounded-full shadow-sm"></div>
                 </motion.div>
-                <div className="absolute -bottom-6 -left-6 bg-black text-white p-4 rounded-[20px] shadow-lg">
-                  <ShieldCheck className="w-6 h-6" />
+                <div className="absolute -bottom-10 -left-10 bg-black text-white p-3 rounded-[20px] shadow-2xl border-4 border-white">
+                  <ShieldCheck className="w-5 h-5" />
                 </div>
               </div>
             </div>
@@ -80,9 +90,9 @@ export default function Login() {
           </div>
 
           <div className="max-w-[280px]">
-            <h1 className="text-3xl font-display font-bold tracking-tight mb-4">Efisiensi Pengadaan dalam Satu Genggaman</h1>
+            <h1 className="text-3xl font-display font-black tracking-tighter mb-4 uppercase leading-none">Sebelas Procurement Form</h1>
             <p className="text-sm text-zinc-400 font-medium leading-relaxed">
-              Solusi cerdas sinkronisasi cloud untuk manajemen logistik perusahaan Anda.
+              Sistem manajemen pengadaan barang eksklusif dengan efisiensi tinggi.
             </p>
           </div>
 
@@ -137,8 +147,8 @@ export default function Login() {
           </button>
 
           <footer className="mt-12 text-center">
-            <p className="text-[11px] font-bold text-zinc-300 uppercase tracking-widest">
-              Developed by ProcureSync Engine v2.4
+            <p className="text-[11px] font-bold text-zinc-200 uppercase tracking-widest">
+              Developed by Sebelas Engine v3.0
             </p>
           </footer>
         </div>
