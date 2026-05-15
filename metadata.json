@@ -1,0 +1,11 @@
+{
+  "name": "Sistem Pengadaan Barang",
+  "description": "Aplikasi form pengadaan barang fungsional dengan integrasi Google Sheets.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
