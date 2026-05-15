@@ -82,7 +82,7 @@ const SCOPES = [
   "https://www.googleapis.com/auth/spreadsheets",
   "https://www.googleapis.com/auth/userinfo.profile",
   "https://www.googleapis.com/auth/userinfo.email",
-  "https://www.googleapis.com/auth/drive.file"
+  "https://www.googleapis.com/auth/drive"
 ];
 
 // Helper to get authorized client
@@ -100,6 +100,7 @@ const getAuthorizedClient = (tokens: any, req?: express.Request) => {
 
 const SPREADSHEET_NAME = "Procurement_Data_App";
 const PHOTOS_FOLDER_NAME = "Procurement_Photos";
+const PHOTOS_FOLDER_ID = process.env.PHOTOS_FOLDER_ID || "1AKVQmLWelx4GZDDBR6mAkqT6oyQ36QGO"; // Fixed folder ID from user
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "asset.sebelas11@gmail.com";
 const CONFIG_PATH = path.join(process.cwd(), "config.json");
 
@@ -470,25 +471,29 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
     
     logAuthInit(req);
 
-    // 1. Find or create photos folder
-    let folderId = "";
-    const folderResp = await drive.files.list({
-      q: `name = '${PHOTOS_FOLDER_NAME}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-      fields: "files(id, name)",
-    });
-
-    if (folderResp.data.files && folderResp.data.files.length > 0) {
-      folderId = folderResp.data.files[0].id!;
-    } else {
-      const folderMetadata = {
-        name: PHOTOS_FOLDER_NAME,
-        mimeType: "application/vnd.google-apps.folder",
-      };
-      const folder = await drive.files.create({
-        requestBody: folderMetadata,
-        fields: "id",
+    // 1. Find or use fixed photos folder
+    let folderId = PHOTOS_FOLDER_ID;
+    
+    // Fallback if PHOTOS_FOLDER_ID is just a name or placeholder
+    if (!folderId || folderId === "Procurement_Photos") {
+      const folderResp = await drive.files.list({
+        q: `name = '${PHOTOS_FOLDER_NAME}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+        fields: "files(id, name)",
       });
-      folderId = folder.data.id!;
+
+      if (folderResp.data.files && folderResp.data.files.length > 0) {
+        folderId = folderResp.data.files[0].id!;
+      } else {
+        const folderMetadata = {
+          name: PHOTOS_FOLDER_NAME,
+          mimeType: "application/vnd.google-apps.folder",
+        };
+        const folder = await drive.files.create({
+          requestBody: folderMetadata,
+          fields: "id",
+        });
+        folderId = folder.data.id!;
+      }
     }
 
     const fileMetadata: any = {
@@ -554,9 +559,23 @@ app.get("/api/drive/image/:fileId", async (req, res) => {
 
     res.setHeader("Content-Type", response.headers["content-type"] || "image/jpeg");
     response.data.pipe(res);
-  } catch (error) {
-    console.error("Proxy image error:", error);
-    res.status(404).send("Image not found");
+  } catch (error: any) {
+    console.error("--- Proxy Image Error ---");
+    if (error.response?.data) {
+      if (typeof error.response.data.on === 'function') {
+        // Error data is a stream, let's try to collect it
+        let errorBody = "";
+        error.response.data.on("data", (chunk: any) => { errorBody += chunk; });
+        error.response.data.on("end", () => {
+          console.error("Proxy image error stream body:", errorBody);
+        });
+      } else {
+        console.error("Proxy image error detail:", JSON.stringify(error.response.data, null, 2));
+      }
+    } else {
+      console.error("Proxy image error message:", error.message);
+    }
+    res.status(404).send("Image not found (unauthorized or missing)");
   }
 });
 
@@ -832,6 +851,23 @@ app.post("/api/admin/users/add", async (req, res) => {
       });
     } catch (e: any) {
       console.warn("Failed to share sheet automatically:", e.message);
+    }
+
+    // 3. Share photos folder with user
+    if (PHOTOS_FOLDER_ID) {
+      console.log(`Sharing photos folder ${PHOTOS_FOLDER_ID} with ${email}`);
+      try {
+        await drive.permissions.create({
+          fileId: PHOTOS_FOLDER_ID,
+          requestBody: {
+            role: 'writer',
+            type: 'user',
+            emailAddress: email
+          }
+        });
+      } catch (e: any) {
+        console.warn("Failed to share photos folder automatically:", e.message);
+      }
     }
 
     res.json({ success: true });
