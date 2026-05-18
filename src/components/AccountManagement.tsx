@@ -7,16 +7,29 @@ interface ManagedUser {
   rowIndex: number;
   email: string;
   name: string;
+  role: string;
   addedAt: string;
 }
 
-export default function AccountManagement() {
+interface AccountManagementProps {
+  authStatus: {
+    user?: {
+      email: string;
+    };
+  };
+}
+
+export default function AccountManagement({ authStatus }: AccountManagementProps) {
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [emailInput, setEmailInput] = useState("");
   const [nameInput, setNameInput] = useState("");
+  const [roleInput, setRoleInput] = useState("USER");
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+  const ADMIN_UTAMA = "asset.sebelas11@gmail.com";
+  const isMainAdmin = authStatus.user?.email.toLowerCase().trim() === ADMIN_UTAMA.toLowerCase().trim();
 
   const fetchUsers = async () => {
     try {
@@ -48,11 +61,13 @@ export default function AccountManagement() {
     try {
       await axios.post("/api/admin/users/add", { 
         email: emailInput, 
-        name: nameInput 
+        name: nameInput,
+        role: roleInput
       }, { withCredentials: true });
       
       setEmailInput("");
       setNameInput("");
+      setRoleInput("USER");
       setStatusMsg({ type: 'success', text: "Akun berhasil didaftarkan!" });
       await fetchUsers();
     } catch (error: any) {
@@ -66,14 +81,15 @@ export default function AccountManagement() {
     }
   };
 
-  const handleDeleteUser = async (rowIndex: number) => {
-    if (!confirm("Hapus akses user ini?")) return;
+  const handleDeleteUser = async (email: string, rowIndex: number) => {
+    if (!confirm(`Hapus akses untuk ${email}?`)) return;
     
     try {
-      await axios.post("/api/admin/users/delete", { rowIndex }, { withCredentials: true });
+      await axios.post("/api/admin/users/delete", { rowIndex, email }, { withCredentials: true });
       await fetchUsers();
-    } catch (error) {
-      alert("Gagal menghapus user");
+    } catch (error: any) {
+      console.error("Delete user error:", error);
+      alert(`Gagal menghapus user: ${error.response?.data?.details || error.message}`);
     }
   };
 
@@ -135,6 +151,26 @@ export default function AccountManagement() {
                   className="w-full bg-white border border-zinc-200 px-4 py-3 rounded-2xl text-sm font-bold outline-none focus:border-black transition-all"
                 />
               </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">Role / Hak Akses</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRoleInput("USER")}
+                    className={`py-3 rounded-2xl text-[10px] font-black uppercase transition-all border ${roleInput === "USER" ? "bg-black text-white border-black" : "bg-white text-zinc-400 border-zinc-100"}`}
+                  >
+                    User
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRoleInput("ADMIN")}
+                    className={`py-3 rounded-2xl text-[10px] font-black uppercase transition-all border ${roleInput === "ADMIN" ? "bg-black text-white border-black" : "bg-white text-zinc-400 border-zinc-100"}`}
+                  >
+                    Admin
+                  </button>
+                </div>
+              </div>
               
               <button 
                 type="submit" 
@@ -176,7 +212,12 @@ export default function AccountManagement() {
                       <Mail className="w-5 h-5" />
                     </div>
                     <div>
-                      <h4 className="text-sm font-black uppercase tracking-tight">{user.name || "Tanpa Nama"}</h4>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-black uppercase tracking-tight">{user.name || "Tanpa Nama"}</h4>
+                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest ${user.role === 'ADMIN' ? 'bg-black text-white' : 'bg-zinc-100 text-zinc-400'}`}>
+                          {user.role}
+                        </span>
+                      </div>
                       <p className="text-xs font-medium text-zinc-400">{user.email}</p>
                     </div>
                   </div>
@@ -188,12 +229,14 @@ export default function AccountManagement() {
                         {user.addedAt}
                       </div>
                     </div>
-                    <button 
-                      onClick={() => handleDeleteUser(user.rowIndex)}
-                      className="p-3 bg-red-50 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all shadow-sm"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {isMainAdmin && (
+                      <button 
+                        onClick={() => handleDeleteUser(user.email, user.rowIndex)}
+                        className="p-3 bg-red-50 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all shadow-sm"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </motion.div>
               ))}

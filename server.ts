@@ -140,7 +140,7 @@ async function getOrCreateMasterSpreadsheet(auth: any) {
     spreadsheetId = response.data.files[0].id!;
     console.log(`Found existing spreadsheet: ${spreadsheetId}`);
     // Ensure Users sheet exists if we found an old one
-    await ensureSheetExists(sheets, spreadsheetId, "Users", ["Email", "Name", "AddedAt"]);
+    await ensureSheetExists(sheets, spreadsheetId, "Users", ["Email", "Name", "Role", "AddedAt"]);
     await ensureSheetExists(sheets, spreadsheetId, "Procurement", ["ID", "Timestamp", "Nama Barang", "Kuantitas", "Satuan", "Harga Satuan", "Harga Total", "Lokasi Store", "Prioritas", "Pemohon", "Deskripsi", "Link Referensi", "Foto Referensi", "Persetujuan", "Deskripsi Persetujuan", "Verifikator"]);
   } else {
     console.log("Creating new master spreadsheet...");
@@ -168,10 +168,10 @@ async function getOrCreateMasterSpreadsheet(auth: any) {
     // Initialize headers for Users
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: "Users!A1:C1",
+      range: "Users!A1:D1",
       valueInputOption: "RAW",
       requestBody: {
-        values: [["Email", "Name", "AddedAt"]]
+        values: [["Email", "Name", "Role", "AddedAt"]]
       }
     });
   }
@@ -402,6 +402,7 @@ async function getUserRole(auth: any): Promise<'ADMIN' | 'USER' | 'UNAUTHORIZED'
   const userEmail = email.toLowerCase().trim();
   const adminEmail = ADMIN_EMAIL.toLowerCase().trim();
   
+  // Hardcoded main admin
   if (userEmail === adminEmail) return 'ADMIN';
   
   try {
@@ -410,11 +411,15 @@ async function getUserRole(auth: any): Promise<'ADMIN' | 'USER' | 'UNAUTHORIZED'
       const sheets = google.sheets({ version: "v4", auth });
       const usersResp = await sheets.spreadsheets.values.get({
         spreadsheetId: masterId,
-        range: "Users!A2:A100",
+        range: "Users!A2:C100",
       });
-      const allowedEmails = (usersResp.data.values || []).flat().map(e => String(e).toLowerCase().trim());
-      if (allowedEmails.includes(userEmail)) {
-        return 'USER';
+      const rows = usersResp.data.values || [];
+      const userRow = rows.find(row => String(row[0]).toLowerCase().trim() === userEmail);
+      
+      if (userRow) {
+        // If Role column exists (index 2), use it. Otherwise default to USER
+        const role = userRow[2] || 'USER';
+        return (role === 'ADMIN' || role === 'USER') ? role : 'USER';
       }
     }
   } catch (e) {
@@ -770,10 +775,8 @@ app.get("/api/admin/users", async (req, res) => {
     const oauth2 = google.oauth2({ version: "v2", auth });
     const userInfo = await oauth2.userinfo.get();
     
-    const userEmail = userInfo.data.email?.toLowerCase().trim();
-    const adminEmail = ADMIN_EMAIL.toLowerCase().trim();
-    
-    if (userEmail !== adminEmail) {
+    const role = await getUserRole(auth);
+    if (role !== 'ADMIN') {
       return res.status(403).json({ error: "Forbidden" });
     }
 
@@ -781,18 +784,19 @@ app.get("/api/admin/users", async (req, res) => {
     const sheets = google.sheets({ version: "v4", auth });
     
     // Ensure Users sheet exists
-    await ensureSheetExists(sheets, masterId, "Users", ["Email", "Name", "AddedAt"]);
+    await ensureSheetExists(sheets, masterId, "Users", ["Email", "Name", "Role", "AddedAt"]);
 
     const usersResp = await sheets.spreadsheets.values.get({
       spreadsheetId: masterId,
-      range: "Users!A2:C100",
+      range: "Users!A2:D100",
     });
 
     const users = (usersResp.data.values || []).map((row, index) => ({
       rowIndex: index + 2,
       email: row[0],
       name: row[1] || "",
-      addedAt: row[2] || ""
+      role: row[2] || "USER",
+      addedAt: row[3] || ""
     }));
 
     res.json(users);
@@ -806,17 +810,15 @@ app.post("/api/admin/users/add", async (req, res) => {
   const tokensStr = req.cookies.google_tokens;
   if (!tokensStr) return res.status(401).json({ error: "Unauthorized" });
 
-  const { email, name } = req.body;
+  const { email, name, role } = req.body;
   try {
     const tokens = JSON.parse(tokensStr);
     const auth = getAuthorizedClient(tokens, req);
     const oauth2 = google.oauth2({ version: "v2", auth });
     const userInfo = await oauth2.userinfo.get();
     
-    const userEmail = userInfo.data.email?.toLowerCase().trim();
-    const adminEmail = ADMIN_EMAIL.toLowerCase().trim();
-    
-    if (userEmail !== adminEmail) {
+    const role = await getUserRole(auth);
+    if (role !== 'ADMIN') {
       return res.status(403).json({ error: "Forbidden" });
     }
 
@@ -825,16 +827,16 @@ app.post("/api/admin/users/add", async (req, res) => {
     const drive = google.drive({ version: "v3", auth });
 
     // 0. Ensure Users sheet exists
-    await ensureSheetExists(sheets, masterId, "Users", ["Email", "Name", "AddedAt"]);
+    await ensureSheetExists(sheets, masterId, "Users", ["Email", "Name", "Role", "AddedAt"]);
 
     // 1. Add to sheet
-    console.log(`Adding user email to sheet: ${email}`);
+    console.log(`Adding user email to sheet: ${email} with role: ${role}`);
     await sheets.spreadsheets.values.append({
       spreadsheetId: masterId,
-      range: "Users!A:C",
+      range: "Users!A:D",
       valueInputOption: "RAW",
       requestBody: {
-        values: [[email, name || "", new Date().toISOString()]]
+        values: [[email, name || "", role || "USER", new Date().toISOString()]]
       }
     });
 
@@ -881,7 +883,7 @@ app.post("/api/admin/users/delete", async (req, res) => {
   const tokensStr = req.cookies.google_tokens;
   if (!tokensStr) return res.status(401).json({ error: "Unauthorized" });
 
-  const { rowIndex } = req.body;
+  const { rowIndex, email } = req.body;
   try {
     const tokens = JSON.parse(tokensStr);
     const auth = getAuthorizedClient(tokens, req);
@@ -891,41 +893,72 @@ app.post("/api/admin/users/delete", async (req, res) => {
     const userEmail = userInfo.data.email?.toLowerCase().trim();
     const adminEmail = ADMIN_EMAIL.toLowerCase().trim();
     
+    // STRICT: Only main admin can delete users
     if (userEmail !== adminEmail) {
-      return res.status(403).json({ error: "Forbidden" });
+      return res.status(403).json({ error: "Terlarang: Hanya Admin Utama yang dapat menghapus akses user." });
     }
 
-    const masterId = getMasterSpreadsheetId();
+    const masterId = await getOrCreateMasterSpreadsheet(auth);
     if (!masterId) throw new Error("Master spreadsheet not initialized");
 
     const sheets = google.sheets({ version: "v4", auth });
-    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: masterId });
-    const sheet = spreadsheet.data.sheets?.find(s => s.properties?.title === "Users");
-    const sheetId = sheet?.properties?.sheetId;
-
-    if (sheetId === undefined) throw new Error("Users sheet not found");
-
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: masterId,
-      requestBody: {
-        requests: [{
-          deleteDimension: {
-            range: {
-              sheetId,
-              dimension: "ROWS",
-              startIndex: rowIndex - 1,
-              endIndex: rowIndex
-            }
-          }
-        }]
+    
+    // Safety check: Row verification before delete
+    // If an email is provided pattern, we verify row contents match
+    if (email) {
+      const resp = await sheets.spreadsheets.values.get({
+        spreadsheetId: masterId,
+        range: `Users!A${rowIndex}:A${rowIndex}`
+      });
+      const foundEmail = resp.data.values?.[0]?.[0];
+      if (foundEmail && String(foundEmail).toLowerCase().trim() !== String(email).toLowerCase().trim()) {
+         console.warn(`User Delete Mismatch: Expected ${email}, Found ${foundEmail} at row ${rowIndex}. Searching for correct row...`);
+         const allUsersResp = await sheets.spreadsheets.values.get({
+           spreadsheetId: masterId,
+           range: "Users!A:A"
+         });
+         const allUsers = allUsersResp.data.values || [];
+         const correctIndex = allUsers.findIndex(r => r[0] && String(r[0]).toLowerCase().trim() === String(email).toLowerCase().trim());
+         if (correctIndex === -1) {
+           return res.status(404).json({ error: "User not found in spreadsheet" });
+         }
+         // Redirect to correct row (0-indexed base + 1 = 1-indexed)
+         return deleteRow(sheets, masterId, correctIndex + 1, res);
       }
-    });
+    }
 
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to delete user" });
+    return deleteRow(sheets, masterId, rowIndex, res);
+  } catch (error: any) {
+    console.error("Delete user error:", error.response?.data || error.message || error);
+    res.status(500).json({ error: "Failed to delete user", details: error.message });
   }
 });
+
+async function deleteRow(sheets: any, spreadsheetId: string, rowIndex: number, res: express.Response) {
+  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
+  const sheet = spreadsheet.data.sheets?.find(s => s.properties?.title === "Users");
+  const sheetId = sheet?.properties?.sheetId;
+
+  if (sheetId === undefined) throw new Error("Users sheet not found");
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [{
+        deleteDimension: {
+          range: {
+            sheetId,
+            dimension: "ROWS",
+            startIndex: rowIndex - 1,
+            endIndex: rowIndex
+          }
+        }
+      }]
+    }
+  });
+
+  res.json({ success: true });
+}
 
 app.post("/api/sheets/delete", async (req, res) => {
   const tokensStr = req.cookies.google_tokens;

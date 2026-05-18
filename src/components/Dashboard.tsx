@@ -438,7 +438,7 @@ export default function Dashboard({ authStatus }: DashboardProps) {
       <main className="flex-1 flex overflow-hidden">
         {activeMainTab === "accounts" ? (
           <div className="flex-1 overflow-y-auto">
-            <AccountManagement />
+            <AccountManagement authStatus={authStatus} />
           </div>
         ) : (
           <>
@@ -556,7 +556,7 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                               </div>
                             </div>
                           </div>
-                          {item.verificationStatus === 'PENDING' && (
+                          {authStatus.role === 'ADMIN' && item.verificationStatus === 'PENDING' && (
                             <div className="flex gap-1.5 sm:gap-2">
                               <button 
                                 onClick={(e) => {
