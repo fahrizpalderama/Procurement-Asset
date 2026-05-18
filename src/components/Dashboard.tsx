@@ -443,7 +443,7 @@ export default function Dashboard({ authStatus }: DashboardProps) {
         ) : (
           <>
             {/* List View Column */}
-            <section className="flex-1 lg:w-[65%] flex flex-col bg-slate-50 overflow-hidden relative">
+            <section className="flex-1 flex flex-col bg-slate-50 overflow-hidden relative">
           <div className="p-4 sm:p-8 pb-4 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div className="flex flex-col">
               <h2 className="text-sm font-bold text-zinc-400 mb-1">
@@ -678,236 +678,6 @@ export default function Dashboard({ authStatus }: DashboardProps) {
           </div>
         </section>
 
-        {/* Form Column */}
-        <aside className="hidden lg:flex flex-col w-[35%] bg-white border-l border-zinc-100 overflow-hidden shadow-[0_0_100px_-20px_rgba(0,0,0,0.05)]">
-          <div className="p-10 flex-1 overflow-y-auto">
-            <div className="mb-10">
-              <div className="inline-flex items-center gap-2 px-3 py-1 bg-zinc-50 border border-zinc-100 rounded-full mb-4">
-                <div className="w-1.5 h-1.5 bg-black rounded-full" />
-                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Modul Input</span>
-              </div>
-              <h2 className="text-4xl font-display font-bold tracking-tight">
-                {editingItem ? "Ubah Data" : "Tambah Baru"}
-              </h2>
-              <p className="text-sm font-medium text-zinc-400 mt-2">Lengkapi detail pengadaan logistik di bawah ini.</p>
-            </div>
-
-            <form key={editingItem?.id || "new"} onSubmit={handleAddOrUpdate} className="space-y-8" autoComplete="off">
-              {editingItem && (
-                <div className="space-y-3">
-                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest block ml-1">ID Unik</label>
-                  <div className="w-full bg-zinc-100 border border-zinc-200 px-5 py-4 rounded-[20px] font-mono text-[10px] font-bold text-zinc-500">
-                    {editingItem.id}
-                  </div>
-                </div>
-              )}
-              <div className="space-y-3">
-                <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest block ml-1">Identitas Barang</label>
-                <input 
-                  name="name"
-                  defaultValue={editingItem?.name}
-                  required
-                  placeholder="Nama barang..."
-                  className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm focus:bg-white focus:border-black outline-none transition-all placeholder:text-zinc-300"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-3">
-                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest block ml-1">Kuantitas</label>
-                  <input 
-                    name="quantity"
-                    type="number"
-                    defaultValue={editingItem?.quantity}
-                    onChange={(e) => setFormFields(prev => ({ ...prev, quantity: Number(e.target.value) || 0 }))}
-                    required
-                    className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm focus:bg-white focus:border-black outline-none transition-all"
-                  />
-                </div>
-                <div className="space-y-3">
-                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest block ml-1">Satuan</label>
-                  <input 
-                    name="unit"
-                    defaultValue={editingItem?.unit}
-                    required
-                    placeholder="Unit..."
-                    className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm focus:bg-white focus:border-black outline-none transition-all placeholder:text-zinc-300 uppercase"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest block ml-1">Harga Satuan (Rp)</label>
-                <input 
-                  name="price"
-                  type="number"
-                  defaultValue={editingItem?.price}
-                  onChange={(e) => setFormFields(prev => ({ ...prev, price: Number(e.target.value) || 0 }))}
-                  required
-                  className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm focus:bg-white focus:border-black outline-none transition-all"
-                />
-              </div>
-
-              <div className="space-y-3">
-                <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest block ml-1">Lokasi Store</label>
-                <input 
-                  name="storeLocation"
-                  defaultValue={editingItem?.storeLocation}
-                  placeholder="Nama toko atau lokasi..."
-                  className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm focus:bg-white focus:border-black outline-none transition-all placeholder:text-zinc-300"
-                />
-              </div>
-
-              <div className="bg-black rounded-[32px] p-8 flex flex-col justify-between shadow-xl shadow-black/10">
-                <span className="text-xs font-bold uppercase tracking-widest text-zinc-500 mb-4">Total Estimasi Biaya</span>
-                <div className="flex items-baseline justify-between gap-4">
-                   <span className="text-sm font-bold text-zinc-500 uppercase">IDR</span>
-                   <span className="text-3xl font-display font-bold text-white tracking-tight truncate">
-                    {(formFields.quantity * formFields.price).toLocaleString()}
-                   </span>
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                 <div className="space-y-3">
-                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest block ml-1">Pemohon</label>
-                    <input 
-                      name="requester"
-                      defaultValue={editingItem?.requester}
-                      required
-                      placeholder="Nama pemohon..."
-                      className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm focus:bg-white focus:border-black outline-none transition-all placeholder:text-zinc-300"
-                    />
-                  </div>
-
-                  <div className="space-y-3">
-                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest block ml-1">Urgensi</label>
-                    <div className="relative">
-                      <select 
-                        name="status"
-                        defaultValue={editingItem?.status || "Penting (5x24 Jam)"}
-                        className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm focus:bg-white focus:border-black outline-none transition-all cursor-pointer appearance-none"
-                      >
-                        <option value="Urgent (2x24 Jam)">Mendesak (2x24 Jam)</option>
-                        <option value="Penting (5x24 Jam)">Penting (5x24 Jam)</option>
-                      </select>
-                      <ChevronRight className="absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 rotate-90 pointer-events-none" />
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest block ml-1">Keterangan</label>
-                    <textarea 
-                      name="description"
-                      defaultValue={editingItem?.description}
-                      rows={3}
-                      placeholder="Spesifikasi atau catatan tambahan..."
-                      className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[24px] font-medium text-sm focus:bg-white focus:border-black outline-none transition-all placeholder:text-zinc-300 resize-none"
-                    />
-                  </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-3">
-                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest block ml-1">Link Ref</label>
-                  <input 
-                    name="refLink"
-                    defaultValue={editingItem?.refLink}
-                    placeholder="https://..."
-                    className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] text-xs font-bold focus:bg-white focus:border-black outline-none transition-all"
-                  />
-                </div>
-                <div className="space-y-3">
-                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest block ml-1">Lampiran</label>
-                  {(!uploadedPhotoUrl && !localPreviewUrl) ? (
-                    <div className="relative h-[54px]">
-                      <input 
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        onChange={handleFileUpload}
-                        className="hidden"
-                        id="photo-upload"
-                      />
-                      <label 
-                        htmlFor="photo-upload"
-                        className="h-full border border-zinc-100 rounded-[20px] bg-zinc-50 flex items-center justify-center gap-2 cursor-pointer hover:bg-white hover:border-black transition-all group"
-                      >
-                        {uploading ? (
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Camera className="w-4 h-4 text-zinc-400 group-hover:text-black transition-colors" />
-                        )}
-                        <span className="text-xs font-bold text-zinc-400 group-hover:text-black">
-                          {uploading ? "Uploading..." : "Lampirkan"}
-                        </span>
-                      </label>
-                    </div>
-                  ) : (
-                    <div className="relative group border border-zinc-100 rounded-[20px] h-[54px] overflow-hidden cursor-zoom-in">
-                       <img 
-                        src={localPreviewUrl || uploadedPhotoUrl} 
-                        alt="Preview" 
-                        referrerPolicy="no-referrer"
-                        className={`w-full h-full object-cover transition-all ${uploading ? 'opacity-50 grayscale' : ''}`}
-                        onClick={() => setPreviewImageUrl(localPreviewUrl || uploadedPhotoUrl)}
-                      />
-                      {uploading && (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <RefreshCw className="w-5 h-5 animate-spin text-white drop-shadow-md" />
-                        </div>
-                      )}
-                      <div className="absolute inset-0 bg-black/80 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                         <button type="button" onClick={handleDeletePhoto} className="p-2 bg-red-500 rounded-full text-white hover:scale-110 transition-transform">
-                           <X className="w-4 h-4" />
-                         </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="pt-6 flex flex-col gap-3">
-                <div className="flex gap-3">
-                  {editingItem && (authStatus.role === 'ADMIN' || (authStatus.role === 'USER' && (editingItem.verificationStatus === 'PENDING' || !editingItem.verificationStatus))) && (
-                    <button 
-                      type="button"
-                      onClick={() => setDeleteConfirmItem(editingItem)}
-                      className="flex-1 bg-red-50 hover:bg-red-100 text-red-600 font-bold py-5 rounded-[24px] text-sm transition-all"
-                    >
-                      Hapus
-                    </button>
-                  )}
-                  
-                  {(!editingItem || authStatus.role === 'ADMIN' || (authStatus.role === 'USER' && (editingItem.verificationStatus === 'PENDING' || !editingItem.verificationStatus))) ? (
-                    <button 
-                      type="submit"
-                      className={`${editingItem ? 'flex-[2]' : 'flex-1'} bg-black hover:scale-[1.02] active:scale-[0.98] text-white font-display font-bold py-5 rounded-[24px] text-lg shadow-xl shadow-black/10 transition-all`}
-                    >
-                      {editingItem ? "Ubah Data" : "Simpan Data"}
-                    </button>
-                  ) : (
-                    <div className="flex-1 bg-zinc-100 text-zinc-400 font-bold py-5 rounded-[24px] text-center text-sm border border-zinc-200">
-                      Data Terkunci (Sudah Terverifikasi)
-                    </div>
-                  )}
-                </div>
-                {editingItem && (
-                  <button 
-                    type="button"
-                    onClick={() => {
-                      setEditingItem(null);
-                      setIsFormOpen(false);
-                    }}
-                    className="w-full bg-zinc-50 hover:bg-zinc-100 text-zinc-400 font-bold py-4 rounded-[20px] text-xs transition-all"
-                  >
-                    Batalkan Perubahan
-                  </button>
-                )}
-              </div>
-            </form>
-          </div>
-        </aside>
           </>
         )}
       </main>
@@ -924,178 +694,187 @@ export default function Dashboard({ authStatus }: DashboardProps) {
         </div>
       </footer>
 
-      {/* Mobile Interaction Layer */}
+      {/* Form Interaction Layer (Responsive Modal/Drawer) */}
       <AnimatePresence>
         {isFormOpen && (
-          <div className="fixed inset-0 z-50 lg:hidden flex flex-col justify-end">
+          <div className="fixed inset-0 z-[150] flex items-center justify-end md:p-6">
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/60 backdrop-blur-md"
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
               onClick={() => setIsFormOpen(false)}
             />
             <motion.div 
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="relative bg-white w-full rounded-t-[40px] p-8 pb-12 shadow-2xl max-h-[95vh] overflow-y-auto"
+              initial={{ x: "100%", opacity: 0.5 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: "100%", opacity: 0.5 }}
+              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              className="relative bg-white w-full md:max-w-xl h-full md:h-[calc(100vh-3rem)] md:rounded-[40px] shadow-2xl flex flex-col overflow-hidden"
             >
-              <div className="w-12 h-1.5 bg-zinc-100 rounded-full mx-auto mb-8" />
-              <div className="mb-8">
-                <h3 className="text-3xl font-display font-bold tracking-tight">
-                  {editingItem ? "Edit Data" : "Tambah Item"}
-                </h3>
-                <p className="text-sm font-medium text-zinc-400 mt-1">Lengkapi form pengadaan di bawah.</p>
+              <div className="p-8 pb-4 shrink-0 flex items-center justify-between border-b border-zinc-50">
+                <div>
+                  <h3 className="text-3xl font-display font-bold tracking-tight">
+                    {editingItem ? "Edit Data" : "Tambah Item"}
+                  </h3>
+                  <p className="text-sm font-medium text-zinc-400 mt-1">Lengkapi form pengadaan di bawah.</p>
+                </div>
+                <button 
+                  onClick={() => setIsFormOpen(false)}
+                  className="p-3 bg-zinc-50 hover:bg-zinc-100 rounded-full transition-all"
+                >
+                  <X className="w-6 h-6" />
+                </button>
               </div>
               
-              <form key={editingItem?.id || "mobile-new"} onSubmit={handleAddOrUpdate} className="grid grid-cols-1 gap-6" autoComplete="off">
-                {editingItem && (
+              <div className="flex-1 overflow-y-auto p-8 pb-12">
+                <form key={editingItem?.id || "modal-new"} onSubmit={handleAddOrUpdate} className="grid grid-cols-1 gap-6" autoComplete="off">
+                  {editingItem && (
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">ID Unik</label>
+                      <div className="w-full bg-zinc-100 border border-zinc-200 px-5 py-4 rounded-[20px] font-mono text-[10px] font-bold text-zinc-500">
+                        {editingItem.id}
+                      </div>
+                    </div>
+                  )}
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">ID Unik</label>
-                    <div className="w-full bg-zinc-100 border border-zinc-200 px-5 py-4 rounded-[20px] font-mono text-[10px] font-bold text-zinc-500">
-                      {editingItem.id}
+                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Nama Barang</label>
+                    <input name="name" defaultValue={editingItem?.name} required className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all" />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Jumlah</label>
+                      <input 
+                        name="quantity" 
+                        type="number" 
+                        defaultValue={editingItem?.quantity} 
+                        onChange={(e) => setFormFields(prev => ({ ...prev, quantity: Number(e.target.value) || 0 }))} 
+                        required 
+                        className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all" 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Satuan</label>
+                      <input name="unit" defaultValue={editingItem?.unit} required className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all" />
                     </div>
                   </div>
-                )}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Nama Barang</label>
-                  <input name="name" defaultValue={editingItem?.name} required className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all" />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
+
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Jumlah</label>
+                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Harga Satuan (Rp)</label>
                     <input 
-                      name="quantity" 
+                      name="price" 
                       type="number" 
-                      defaultValue={editingItem?.quantity} 
-                      onChange={(e) => setFormFields(prev => ({ ...prev, quantity: Number(e.target.value) || 0 }))} 
+                      defaultValue={editingItem?.price} 
+                      onChange={(e) => setFormFields(prev => ({ ...prev, price: Number(e.target.value) || 0 }))} 
                       required 
                       className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all" 
                     />
                   </div>
+
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Satuan</label>
-                    <input name="unit" defaultValue={editingItem?.unit} required className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all" />
+                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Lokasi Store</label>
+                    <input 
+                      name="storeLocation" 
+                      defaultValue={editingItem?.storeLocation} 
+                      placeholder="Nama toko..."
+                      className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all" 
+                    />
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Harga Satuan (Rp)</label>
-                  <input 
-                    name="price" 
-                    type="number" 
-                    defaultValue={editingItem?.price} 
-                    onChange={(e) => setFormFields(prev => ({ ...prev, price: Number(e.target.value) || 0 }))} 
-                    required 
-                    className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all" 
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Lokasi Store</label>
-                  <input 
-                    name="storeLocation" 
-                    defaultValue={editingItem?.storeLocation} 
-                    placeholder="Nama toko..."
-                    className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all" 
-                  />
-                </div>
-
-                <div className="bg-black rounded-[32px] p-8 flex flex-col justify-between shadow-xl shadow-black/20">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3">Total Estimasi Biaya</span>
-                  <div className="flex items-baseline justify-between gap-4">
-                    <span className="text-sm font-bold text-zinc-500 uppercase">IDR</span>
-                    <span className="text-3xl font-display font-bold text-white tracking-tight truncate">
-                      {(formFields.quantity * formFields.price).toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Pemohon</label>
-                  <input name="requester" defaultValue={editingItem?.requester} required className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all" />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Urgensi</label>
-                  <div className="relative">
-                    <select name="status" defaultValue={editingItem?.status || "Penting (5x24 Jam)"} className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black appearance-none">
-                      <option value="Urgent (2x24 Jam)">Mendesak (2x24 Jam)</option>
-                      <option value="Penting (5x24 Jam)">Penting (5x24 Jam)</option>
-                    </select>
-                    <ChevronRight className="absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 rotate-90 pointer-events-none" />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Keterangan</label>
-                  <textarea 
-                    name="description" 
-                    defaultValue={editingItem?.description} 
-                    rows={3}
-                    placeholder="Catatan tambahan..."
-                    className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[24px] font-medium text-sm outline-none focus:bg-white focus:border-black transition-all resize-none" 
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Link Ref</label>
-                  <input name="refLink" defaultValue={editingItem?.refLink} placeholder="https://..." className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all" />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Lampiran Visual</label>
-                  {(!uploadedPhotoUrl && !localPreviewUrl) ? (
-                    <label htmlFor="photo-upload-mobile" className="w-full border-2 border-dashed border-zinc-100 aspect-video rounded-[32px] flex flex-col items-center justify-center gap-3 bg-zinc-50 active:bg-zinc-100 transition-colors cursor-pointer">
-                      <input id="photo-upload-mobile" type="file" accept="image/*" capture="environment" onChange={handleFileUpload} className="hidden" />
-                      {uploading ? <RefreshCw className="w-8 h-8 animate-spin text-black" /> : <Camera className="w-8 h-8 text-zinc-300" />}
-                      <span className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">Ambil Foto</span>
-                    </label>
-                  ) : (
-                    <div className="relative aspect-video bg-zinc-100 rounded-[32px] overflow-hidden cursor-zoom-in group">
-                      <img 
-                        src={localPreviewUrl || uploadedPhotoUrl} 
-                        alt="Pratinjau" 
-                        referrerPolicy="no-referrer"
-                        className={`w-full h-full object-cover ${uploading ? 'opacity-50 grayscale' : ''}`} 
-                        onClick={() => setPreviewImageUrl(localPreviewUrl || uploadedPhotoUrl)}
-                      />
-                      {uploading && (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <RefreshCw className="w-10 h-10 animate-spin text-white drop-shadow-lg" />
-                        </div>
-                      )}
-                      <button type="button" onClick={handleDeletePhoto} className="absolute top-4 right-4 bg-red-500 p-3 rounded-full text-white shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"><X className="w-5 h-5" /></button>
+                  <div className="bg-black rounded-[32px] p-8 flex flex-col justify-between shadow-xl shadow-black/20">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3">Total Estimasi Biaya</span>
+                    <div className="flex items-baseline justify-between gap-4">
+                      <span className="text-sm font-bold text-zinc-500 uppercase">IDR</span>
+                      <span className="text-3xl font-display font-bold text-white tracking-tight truncate">
+                        {(formFields.quantity * formFields.price).toLocaleString()}
+                      </span>
                     </div>
-                  )}
-                </div>
-                <div className="flex gap-4 pt-6">
-                  {editingItem && (authStatus.role === 'ADMIN' || (authStatus.role === 'USER' && (editingItem.verificationStatus === 'PENDING' || !editingItem.verificationStatus))) && (
-                    <button 
-                      type="button" 
-                      onClick={() => {
-                        setDeleteConfirmItem(editingItem);
-                      }}
-                      className="flex-1 bg-red-50 text-red-600 font-bold py-6 rounded-[24px] text-lg active:scale-95 transition-all"
-                    >
-                      Hapus
-                    </button>
-                  )}
+                  </div>
 
-                  {(!editingItem || authStatus.role === 'ADMIN' || (authStatus.role === 'USER' && (editingItem.verificationStatus === 'PENDING' || !editingItem.verificationStatus))) ? (
-                    <button type="submit" className={`${editingItem ? 'flex-[2]' : 'w-full'} bg-black text-white font-display font-bold py-6 rounded-[24px] text-xl active:scale-95 transition-all shadow-xl shadow-black/20`}>
-                      {editingItem ? "Ubah Data" : "Simpan Data"}
-                    </button>
-                  ) : (
-                    <div className="w-full bg-zinc-100 text-zinc-400 font-bold py-6 rounded-[24px] text-center text-sm border border-zinc-200">
-                      Terkunci (Sudah Terverifikasi)
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Pemohon</label>
+                    <input name="requester" defaultValue={editingItem?.requester} required className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all" />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Urgensi</label>
+                    <div className="relative">
+                      <select name="status" defaultValue={editingItem?.status || "Penting (5x24 Jam)"} className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black appearance-none">
+                        <option value="Urgent (2x24 Jam)">Mendesak (2x24 Jam)</option>
+                        <option value="Penting (5x24 Jam)">Penting (5x24 Jam)</option>
+                      </select>
+                      <ChevronRight className="absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 rotate-90 pointer-events-none" />
                     </div>
-                  )}
-                </div>
-              </form>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Keterangan</label>
+                    <textarea 
+                      name="description" 
+                      defaultValue={editingItem?.description} 
+                      rows={3}
+                      placeholder="Catatan tambahan..."
+                      className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[24px] font-medium text-sm outline-none focus:bg-white focus:border-black transition-all resize-none" 
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Link Ref</label>
+                    <input name="refLink" defaultValue={editingItem?.refLink} placeholder="https://..." className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all" />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Lampiran Visual</label>
+                    {(!uploadedPhotoUrl && !localPreviewUrl) ? (
+                      <label htmlFor="photo-upload-universal" className="w-full border-2 border-dashed border-zinc-100 aspect-video rounded-[32px] flex flex-col items-center justify-center gap-3 bg-zinc-50 hover:border-black transition-colors cursor-pointer">
+                        <input id="photo-upload-universal" type="file" accept="image/*" capture="environment" onChange={handleFileUpload} className="hidden" />
+                        {uploading ? <RefreshCw className="w-8 h-8 animate-spin text-black" /> : <Camera className="w-8 h-8 text-zinc-300" />}
+                        <span className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">Ambil/Unggah Foto</span>
+                      </label>
+                    ) : (
+                      <div className="relative aspect-video bg-zinc-100 rounded-[32px] overflow-hidden cursor-zoom-in group">
+                        <img 
+                          src={localPreviewUrl || uploadedPhotoUrl} 
+                          alt="Pratinjau" 
+                          referrerPolicy="no-referrer"
+                          className={`w-full h-full object-cover ${uploading ? 'opacity-50 grayscale' : ''}`} 
+                          onClick={() => setPreviewImageUrl(localPreviewUrl || uploadedPhotoUrl)}
+                        />
+                        {uploading && (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <RefreshCw className="w-10 h-10 animate-spin text-white drop-shadow-lg" />
+                          </div>
+                        )}
+                        <button type="button" onClick={handleDeletePhoto} className="absolute top-4 right-4 bg-red-500 p-3 rounded-full text-white shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"><X className="w-5 h-5" /></button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-4 pt-6">
+                    {editingItem && (authStatus.role === 'ADMIN' || (authStatus.role === 'USER' && (editingItem.verificationStatus === 'PENDING' || !editingItem.verificationStatus))) && (
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          setDeleteConfirmItem(editingItem);
+                        }}
+                        className="flex-1 bg-red-50 text-red-600 font-bold py-6 rounded-[24px] text-lg active:scale-95 transition-all"
+                      >
+                        Hapus
+                      </button>
+                    )}
+
+                    {(!editingItem || authStatus.role === 'ADMIN' || (authStatus.role === 'USER' && (editingItem.verificationStatus === 'PENDING' || !editingItem.verificationStatus))) ? (
+                      <button type="submit" className="flex-[2] bg-black text-white font-display font-bold py-6 rounded-[24px] text-xl active:scale-95 transition-all shadow-xl shadow-black/20">
+                        {editingItem ? "Ubah Data" : "Simpan Data"}
+                      </button>
+                    ) : (
+                      <div className="w-full bg-zinc-100 text-zinc-400 font-bold py-6 rounded-[24px] text-center text-sm border border-zinc-200">
+                        Terkunci (Sudah Terverifikasi)
+                      </div>
+                    )}
+                  </div>
+                </form>
+              </div>
             </motion.div>
           </div>
         )}
@@ -1249,26 +1028,32 @@ export default function Dashboard({ authStatus }: DashboardProps) {
 
       <button 
         onClick={() => {
-          if (activeMainTab === "accounts") {
-             setActiveMainTab("dashboard");
-          } else {
-            setEditingItem(null);
-            setIsFormOpen(true);
-          }
+          setEditingItem(null);
+          setUploadedPhotoUrl("");
+          setLocalPreviewUrl("");
+          setFormFields({ quantity: 0, price: 0 });
+          setIsFormOpen(true);
         }}
-        className="lg:hidden fixed bottom-10 right-10 w-20 h-20 bg-black text-white rounded-full shadow-2xl shadow-black/30 flex items-center justify-center active:scale-90 transition-all z-40 border-4 border-white"
+        className="fixed bottom-8 right-8 sm:bottom-10 sm:right-10 flex items-center gap-3 bg-black text-white px-6 sm:px-8 h-18 sm:h-20 rounded-[24px] sm:rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.3)] active:scale-95 transition-all z-[100] border-2 border-white/20 hover:scale-105 group"
       >
-        {activeMainTab === "accounts" ? <FileSpreadsheet className="w-10 h-10" /> : <Plus className="w-10 h-10" />}
+        <div className="flex flex-col items-start leading-none">
+          <span className="text-[8px] sm:text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500 mb-1">Tambah Item</span>
+          <span className="text-sm sm:text-lg font-display font-black uppercase tracking-tight">Input</span>
+        </div>
+        <div className="bg-white/10 p-2 sm:p-3 rounded-xl sm:rounded-2xl group-hover:bg-white group-hover:text-black transition-all">
+          <Plus className="w-6 h-6 sm:w-8 sm:h-8 group-hover:rotate-90 transition-transform duration-500" />
+        </div>
       </button>
 
-      {/* Mobile Role Navigation (Floating) */}
+      {/* Role Navigation (Desktop & Mobile) ONLY for Admin */}
       {authStatus.role === 'ADMIN' && (
-        <div className="lg:hidden fixed bottom-10 left-10 flex gap-2 z-40">
+        <div className="fixed bottom-10 left-10 flex gap-2 z-40">
            <button 
             onClick={() => setActiveMainTab(activeMainTab === "dashboard" ? "accounts" : "dashboard")}
-            className="w-14 h-14 bg-white text-black border-2 border-zinc-100 rounded-2xl shadow-xl flex items-center justify-center active:scale-90 transition-all"
+            className="w-14 h-14 bg-white text-black border-2 border-zinc-100 rounded-2xl shadow-xl flex items-center justify-center active:scale-90 transition-all hover:bg-zinc-50"
+            title={activeMainTab === "dashboard" ? "Kelola Akun" : "Kembali ke Dashboard"}
            >
-             {activeMainTab === "dashboard" ? <Plus className="w-6 h-6" /> : <FileSpreadsheet className="w-6 h-6" />}
+             {activeMainTab === "dashboard" ? <ShieldCheck className="w-6 h-6" /> : <Package className="w-6 h-6" />}
            </button>
         </div>
       )}

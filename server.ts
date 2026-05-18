@@ -439,6 +439,22 @@ app.get("/api/auth/status", async (req, res) => {
   try {
     const tokens = JSON.parse(tokensStr);
     const auth = getAuthorizedClient(tokens, req);
+    
+    // Listen for token refresh events
+    auth.on('tokens', (newTokens) => {
+      console.log("Tokens refreshed automatically. Updating cookie.");
+      const currentTokens = JSON.parse(req.cookies.google_tokens || "{}");
+      const combinedTokens = { ...currentTokens, ...newTokens };
+      
+      const isHttps = getCallbackUrl(req).startsWith("https");
+      res.cookie("google_tokens", JSON.stringify(combinedTokens), {
+        httpOnly: true,
+        secure: isHttps,
+        sameSite: isHttps ? "none" : "lax",
+        maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+      });
+    });
+
     const oauth2 = google.oauth2({ version: "v2", auth });
     const userInfo = await oauth2.userinfo.get();
     
@@ -450,6 +466,7 @@ app.get("/api/auth/status", async (req, res) => {
       role 
     });
   } catch (error) {
+    console.error("Auth Status Check Error:", error);
     res.json({ isAuthenticated: false });
   }
 });

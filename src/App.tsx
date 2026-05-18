@@ -18,6 +18,46 @@ export default function App() {
     checkAuth();
   }, []);
 
+  // --- AUTO LOGOUT LOGIC (10 MINUTES) ---
+  useEffect(() => {
+    if (!authStatus?.isAuthenticated) return;
+
+    let timeoutId: NodeJS.Timeout;
+    const INACTIVITY_LIMIT = 10 * 60 * 1000; // 10 minutes
+
+    const handleLogout = async () => {
+      try {
+        await axios.post("/api/auth/logout", {}, { withCredentials: true });
+        window.location.reload(); // Hard reload to clear state and redirect to login
+      } catch (err) {
+        console.error("Auto-logout failed:", err);
+      }
+    };
+
+    const resetTimer = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(handleLogout, INACTIVITY_LIMIT);
+    };
+
+    // Events to track user activity
+    const events = ["mousedown", "mousemove", "keypress", "scroll", "touchstart"];
+    
+    // Set initial timer
+    resetTimer();
+
+    // Add event listeners
+    events.forEach(event => {
+      document.addEventListener(event, resetTimer);
+    });
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      events.forEach(event => {
+        document.removeEventListener(event, resetTimer);
+      });
+    };
+  }, [authStatus?.isAuthenticated]);
+
   if (authStatus === null) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white font-sans overflow-hidden relative">
