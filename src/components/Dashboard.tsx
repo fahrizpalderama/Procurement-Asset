@@ -16,6 +16,7 @@ import {
   Image as ImageIcon,
   Calendar,
   ExternalLink,
+  Link,
   X,
   ShieldCheck
 } from "lucide-react";
@@ -46,13 +47,33 @@ export default function Dashboard({ authStatus }: DashboardProps) {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ProcurementItem | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"inventaris" | "disetujui" | "ditolak">("inventaris");
+  const [activeTab, setActiveTab] = useState<"inventaris" | "disetujui" | "ditolak" | "transfer" | "realisasi">("inventaris");
   const [uploading, setUploading] = useState(false);
   const [uploadedPhotoUrl, setUploadedPhotoUrl] = useState("");
   const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
   const [deleteConfirmItem, setDeleteConfirmItem] = useState<ProcurementItem | null>(null);
   const [verifyItem, setVerifyItem] = useState<{ item: ProcurementItem, status: 'APPROVED' | 'REJECTED' } | null>(null);
+  const [transferItem, setTransferItem] = useState<ProcurementItem | null>(null);
+  const [transferForm, setTransferForm] = useState({
+    amount: "",
+    note: "",
+    evidenceLink: "",
+    verifier: ""
+  });
+  const [transferPhotoUrl, setTransferPhotoUrl] = useState("");
+  const [transferLoading, setTransferLoading] = useState(false);
+  const [realizeItem, setRealizeItem] = useState<ProcurementItem | null>(null);
+  const [realizeForm, setRealizeForm] = useState({
+    amount: "",
+    purchasedBy: "",
+    invoiceLink: "",
+  });
+  const [realizePhotoUrl, setRealizePhotoUrl] = useState("");
+  const [realizeLoading, setRealizeLoading] = useState(false);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [stores, setStores] = useState<string[]>([]);
+  const [verificators, setVerificators] = useState<string[]>([]);
   const [formFields, setFormFields] = useState({
     quantity: 0,
     price: 0
@@ -61,9 +82,19 @@ export default function Dashboard({ authStatus }: DashboardProps) {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const { data } = await axios.get("/api/sheets/data", { withCredentials: true });
+      const { data: dataResp } = await axios.get("/api/sheets/data", { withCredentials: true });
+      // Fetch categories
+      try {
+        const { data: catData } = await axios.get("/api/sheets/categories", { withCredentials: true });
+        setCategories(catData.categories || []);
+        setStores(catData.stores || []);
+        setVerificators(catData.verificators || []);
+      } catch (catErr) {
+        console.warn("Failed to fetch categories/stores/verificators:", catErr);
+      }
+      
       // Normalize photo URLs
-      const normalizedItems = data.items.map((item: ProcurementItem) => {
+      const normalizedItems = dataResp.items.map((item: ProcurementItem) => {
         // Log for debugging (only for non-empty photos)
         if (item.refPhoto && item.refPhoto.length > 5) {
           console.log(`Item ${item.id} has photo: ${item.refPhoto.substring(0, 30)}...`);
@@ -81,7 +112,7 @@ export default function Dashboard({ authStatus }: DashboardProps) {
         };
       });
       setItems(normalizedItems);
-      setSpreadsheetId(data.spreadsheetId);
+      setSpreadsheetId(dataResp.spreadsheetId);
     } catch (error) {
       console.error("Fetch error", error);
     } finally {
@@ -93,11 +124,21 @@ export default function Dashboard({ authStatus }: DashboardProps) {
     if (!url) return "";
     if (url.startsWith("/api/drive/image/")) return url;
     
+    // Check for drive.google.com/file/d/ID/view format
+    if (url.includes("drive.google.com/file/d/")) {
+      const parts = url.split("/file/d/");
+      if (parts.length > 1) {
+        const id = parts[1].split("/")[0].split("?")[0];
+        if (id) return `/api/drive/image/${id}`;
+      }
+    }
+    
     // Check for drive.google.com/uc?id=... or drive.google.com/open?id=...
     if (url.includes("drive.google.com")) {
       const match = url.match(/[?&]id=([^&]+)/);
       if (match && match[1]) {
-        return `/api/drive/image/${match[1]}`;
+        const id = match[1].split("&")[0]; // Ensure no extra params
+        return `/api/drive/image/${id}`;
       }
     }
     return url;
@@ -232,6 +273,7 @@ export default function Dashboard({ authStatus }: DashboardProps) {
     const itemData = {
       id: editingItem?.id || "",
       name: formData.get("name") as string,
+      category: formData.get("category") as string,
       quantity: qty,
       unit: formData.get("unit") as string,
       price: price,
@@ -284,6 +326,110 @@ export default function Dashboard({ authStatus }: DashboardProps) {
     setVerifyItem({ item, status: 'REJECTED' });
   };
 
+  const handleTransfer = (item: ProcurementItem) => {
+    setTransferItem(item);
+    setTransferForm({
+      amount: item.totalPrice.toString(),
+      note: "",
+      evidenceLink: "",
+      verifier: authStatus.user?.name || ""
+    });
+    setTransferPhotoUrl("");
+  };
+
+  const handleTransferSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!transferItem) return;
+
+    try {
+      setTransferLoading(true);
+      await axios.post("/api/sheets/transfer", {
+        spreadsheetId,
+        rowIndex: transferItem.rowIndex,
+        transferData: {
+          verifier: transferForm.verifier,
+          amount: transferForm.amount,
+          note: transferForm.note,
+          evidenceLink: transferForm.evidenceLink,
+          evidencePhoto: transferPhotoUrl
+        }
+      }, { withCredentials: true });
+      
+      setTransferItem(null);
+      setTransferForm({
+        amount: "",
+        note: "",
+        evidenceLink: "",
+        verifier: ""
+      });
+      setTransferPhotoUrl("");
+      await fetchData();
+      alert("Item berhasil di-transfer ke tahap pengelolaan aset.");
+    } catch (err) {
+      alert("Gagal memproses transfer.");
+    } finally {
+      setTransferLoading(false);
+    }
+  };
+
+  const handleRealizeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!realizeItem) return;
+
+    try {
+      setRealizeLoading(true);
+      await axios.post("/api/sheets/realize", {
+        spreadsheetId,
+        rowIndex: realizeItem.rowIndex,
+        realizationData: {
+          amount: realizeForm.amount,
+          purchasedBy: realizeForm.purchasedBy,
+          invoiceLink: realizeForm.invoiceLink,
+          photo: realizePhotoUrl
+        }
+      }, { withCredentials: true });
+      
+      setRealizeItem(null);
+      setRealizeForm({
+        amount: "",
+        purchasedBy: "",
+        invoiceLink: "",
+      });
+      setRealizePhotoUrl("");
+      await fetchData();
+      alert("Item berhasil direalisasikan.");
+    } catch (err) {
+      alert("Gagal memproses realisasi.");
+    } finally {
+      setRealizeLoading(false);
+    }
+  };
+
+  const handleCancel = async (item: ProcurementItem) => {
+    const isRejected = item.verificationStatus === 'REJECTED';
+    const confirmMsg = isRejected 
+      ? "Batalkan penolakan? Item akan kembali ke status PENDING (Inventaris)." 
+      : "Batalkan persetujuan? Item akan kembali ke status PENDING (Inventaris).";
+      
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      setLoading(true);
+      await axios.post("/api/sheets/verify", {
+        spreadsheetId,
+        rowIndex: item.rowIndex,
+        status: "PENDING",
+        reason: isRejected ? "Penolakan dibatalkan" : "Persetujuan dibatalkan",
+        verifier: ""
+      }, { withCredentials: true });
+      await fetchData();
+    } catch (err) {
+      alert("Gagal membatalkan status.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleVerifySubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!verifyItem) return;
@@ -334,6 +480,8 @@ export default function Dashboard({ authStatus }: DashboardProps) {
     if (activeTab === "inventaris") matchesTab = vStatus === "PENDING";
     else if (activeTab === "disetujui") matchesTab = vStatus === "APPROVED";
     else if (activeTab === "ditolak") matchesTab = vStatus === "REJECTED";
+    else if (activeTab === "transfer") matchesTab = vStatus === "TRANSFERRED";
+    else if (activeTab === "realisasi") matchesTab = vStatus === "REALIZED";
     
     return matchesSearch && matchesTab;
   });
@@ -385,7 +533,7 @@ export default function Dashboard({ authStatus }: DashboardProps) {
             </div>
           </div>
           
-          <nav className="flex items-center gap-1 sm:gap-2 bg-zinc-50 p-1 rounded-2xl overflow-x-auto no-scrollbar max-w-[200px] sm:max-w-none">
+            <nav className="flex items-center gap-1 sm:gap-2 bg-zinc-50 p-1 rounded-2xl overflow-x-auto no-scrollbar max-w-[150px] sm:max-w-none">
             <button 
               onClick={() => {
                 setActiveMainTab("dashboard");
@@ -394,16 +542,15 @@ export default function Dashboard({ authStatus }: DashboardProps) {
               className={`px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${activeMainTab === "dashboard" ? "bg-white shadow-sm border border-zinc-100 text-black" : "text-zinc-400 hover:text-black"}`}
             >
               <FileSpreadsheet className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
-              <span className="hidden sm:inline">Dashboard</span>
-              <span className="sm:hidden">Dash</span>
+              <span>Dashboard</span>
             </button>
             {authStatus.role === 'ADMIN' && (
               <button 
                 onClick={() => setActiveMainTab("accounts")}
                 className={`px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${activeMainTab === "accounts" ? "bg-white shadow-sm border border-zinc-100 text-black" : "text-zinc-400 hover:text-black"}`}
               >
-                <Plus className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
-                Akun
+                <ShieldCheck className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
+                <span>Akun</span>
               </button>
             )}
           </nav>
@@ -447,15 +594,23 @@ export default function Dashboard({ authStatus }: DashboardProps) {
           <div className="p-4 sm:p-8 pb-4 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div className="flex flex-col">
               <h2 className="text-sm font-bold text-zinc-400 mb-1">
-                {activeTab === "inventaris" ? "Daftar Pengadaan Aktif" : activeTab === "disetujui" ? "Daftar Pengadaan Disetujui" : "Daftar Pengadaan Ditolak"}
+                {activeTab === "inventaris" ? "Daftar Pengadaan Aktif" : 
+                 activeTab === "disetujui" ? "Daftar Pengadaan Disetujui" : 
+                 activeTab === "ditolak" ? "Daftar Pengadaan Ditolak" :
+                 activeTab === "transfer" ? "Menu Transfer Aset" : "Menu Realisasi Aset"}
               </h2>
               <div className="flex items-center gap-4">
                 <span className="text-2xl sm:text-3xl font-display font-bold tracking-tight">
-                  {activeTab === "inventaris" ? "Inventaris" : activeTab === "disetujui" ? "Disetujui" : "Ditolak"}
+                  {activeTab === "inventaris" ? "Inventaris" : 
+                   activeTab === "disetujui" ? "Disetujui" : 
+                   activeTab === "ditolak" ? "Ditolak" :
+                   activeTab === "transfer" ? "Transfer" : "Realisasi"}
                 </span>
-                <span className="px-3 py-1 bg-black text-white rounded-full text-[11px] font-bold">
-                  {filteredItems.length}
-                </span>
+                {(activeTab === "inventaris" || activeTab === "disetujui" || activeTab === "ditolak") && (
+                  <span className="px-3 py-1 bg-black text-white rounded-full text-[11px] font-bold">
+                    {filteredItems.length}
+                  </span>
+                )}
               </div>
             </div>
             
@@ -479,6 +634,18 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                   className={`flex-1 sm:px-6 py-2.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all whitespace-nowrap ${activeTab === "ditolak" ? "bg-white text-black shadow-sm" : "text-zinc-500 hover:text-zinc-700"}`}
                  >
                    Ditolak
+                 </button>
+                 <button 
+                  onClick={() => setActiveTab("transfer")}
+                  className={`flex-1 sm:px-6 py-2.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all whitespace-nowrap ${activeTab === "transfer" ? "bg-white text-black shadow-sm" : "text-zinc-500 hover:text-zinc-700"}`}
+                 >
+                   Transfer
+                 </button>
+                 <button 
+                  onClick={() => setActiveTab("realisasi")}
+                  className={`flex-1 sm:px-6 py-2.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all whitespace-nowrap ${activeTab === "realisasi" ? "bg-white text-black shadow-sm" : "text-zinc-500 hover:text-zinc-700"}`}
+                 >
+                   Realisasi
                  </button>
               </div>
 
@@ -523,30 +690,50 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                       className="group bg-white rounded-[24px] p-6 shadow-sm border border-zinc-100/50 hover:shadow-xl hover:shadow-black/5 transition-all flex flex-col sm:flex-row items-stretch sm:items-center gap-6"
                     >
                       {/* Photo Thumbnail */}
-                      <div 
-                        className="w-full sm:w-32 h-32 bg-zinc-50 rounded-2xl overflow-hidden shrink-0 border border-zinc-100 cursor-zoom-in"
-                        onClick={() => item.refPhoto && setPreviewImageUrl(item.refPhoto)}
-                      >
-                        {item.refPhoto ? (
-                          <img 
-                            src={item.refPhoto} 
-                            alt={item.name} 
-                            referrerPolicy="no-referrer"
-                            className="w-full h-full object-cover hover:scale-110 transition-transform duration-500"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = `https://placehold.co/400x400/f8fafc/94a3b8?text=Error+Loading`;
-                            }}
-                          />
+                      <div className="flex flex-col gap-3 shrink-0 w-full sm:w-32">
+                        <div 
+                          className="w-full h-32 bg-zinc-50 rounded-2xl overflow-hidden border border-zinc-100 cursor-zoom-in"
+                          onClick={() => item.refPhoto && setPreviewImageUrl(item.refPhoto)}
+                        >
+                          {item.refPhoto ? (
+                            <img 
+                              src={item.refPhoto} 
+                              alt={item.name} 
+                              referrerPolicy="no-referrer"
+                              className="w-full h-full object-cover hover:scale-110 transition-transform duration-500"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = `https://placehold.co/400x400/f8fafc/94a3b8?text=Error+Loading`;
+                              }}
+                            />
+                          ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center text-zinc-200">
+                              <ImageIcon className="w-8 h-8 mb-1" />
+                              <span className="text-[10px] font-bold uppercase tracking-tighter">Tanpa Foto</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Reference Link moved below photo */}
+                        {item.refLink ? (
+                          <a 
+                            href={item.refLink} 
+                            target="_blank" 
+                            rel="noreferrer" 
+                            className="flex items-center justify-center gap-2 w-full py-2 bg-zinc-50 hover:bg-black hover:text-white rounded-xl border border-zinc-100 transition-all group"
+                          >
+                            <Link className="w-3 h-3 text-zinc-400 group-hover:text-white" />
+                            <span className="text-[9px] font-black uppercase tracking-widest">Buka Referensi</span>
+                          </a>
                         ) : (
-                          <div className="w-full sm:h-full flex flex-col items-center justify-center text-zinc-200">
-                            <ImageIcon className="w-8 h-8 mb-1" />
-                            <span className="text-[10px] font-bold uppercase tracking-tighter">Tanpa Foto</span>
-                          </div>
+                           <div className="flex items-center justify-center gap-2 w-full py-2 bg-zinc-50/30 rounded-xl border border-zinc-100/50 cursor-not-allowed opacity-40">
+                             <Link className="w-3 h-3 text-zinc-200" />
+                             <span className="text-[9px] font-black uppercase tracking-widest text-zinc-300">No Referensi</span>
+                           </div>
                         )}
                       </div>
 
                       <div className="flex-1 flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-6 w-full min-w-0">
-                        <div className="w-full md:w-28 shrink-0 flex flex-row md:flex-col items-center md:items-start justify-between md:justify-center gap-2 border-b md:border-b-0 border-zinc-50 pb-3 md:pb-0">
+                        <div className="w-full md:w-32 shrink-0 flex flex-row md:flex-col items-center md:items-start justify-between md:justify-center gap-2 border-b md:border-b-0 border-zinc-50 pb-3 md:pb-0">
                           <div className="space-y-1">
                             <div className="text-[8px] sm:text-[9px] font-bold text-zinc-400 uppercase tracking-widest leading-none">Waktu Pengadaan</div>
                             <div className="flex items-center gap-2 md:block">
@@ -556,35 +743,14 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                               </div>
                             </div>
                           </div>
-                          {authStatus.role === 'ADMIN' && item.verificationStatus === 'PENDING' && (
-                            <div className="flex gap-1.5 sm:gap-2">
-                              <button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleApprove(item);
-                                }}
-                                className="p-2 sm:p-2.5 rounded-full transition-all border bg-white border-zinc-100 text-zinc-300 hover:bg-zinc-50 hover:text-green-500 shadow-sm"
-                                title="Setujui"
-                              >
-                                <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5" />
-                              </button>
-                              <button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleReject(item);
-                                }}
-                                className="p-2 sm:p-2.5 rounded-full transition-all border bg-white border-zinc-100 text-zinc-300 hover:bg-zinc-50 hover:text-red-500 shadow-sm"
-                                title="Tolak"
-                              >
-                                <X className="w-4 h-4 sm:w-5 sm:h-5" />
-                              </button>
-                            </div>
-                          )}
                         </div>
                         
-                        <div className="flex-1 min-w-0 w-full">
+                        <div className="flex-1 min-0 w-full">
                           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                             <span className="text-[8px] sm:text-[9px] font-black bg-zinc-900 text-white px-1.5 py-0.5 rounded uppercase tracking-tighter shrink-0">{item.id}</span>
+                            {item.category && (
+                               <span className="text-[8px] sm:text-[9px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded uppercase tracking-tighter shrink-0">{item.category}</span>
+                            )}
                             <h4 className="text-base sm:text-lg font-display font-bold tracking-tight uppercase truncate max-w-full">{item.name}</h4>
                           </div>
                           <p className="text-[11px] sm:text-xs text-zinc-400 font-medium line-clamp-2 mb-4 leading-relaxed">{item.description || "Tidak ada deskripsi."}</p>
@@ -592,54 +758,221 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                           <div className="flex flex-wrap gap-1.5 sm:gap-2">
                              <div className="flex items-center gap-1.5 sm:gap-2 bg-zinc-50 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg border border-zinc-100">
                                <Package className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-zinc-400" />
-                               <span className="text-[10px] sm:text-xs font-bold">{item.quantity} <span className="text-[8px] uppercase text-zinc-400 ml-0.5">{item.unit || 'Unit'}</span></span>
+                               <span className="text-[10px] sm:text-xs font-bold text-black">{item.quantity} <span className="text-[8px] uppercase text-zinc-400 ml-0.5">{item.unit || 'Unit'}</span></span>
+                             </div>
+                             <div className="flex items-center gap-1.5 sm:gap-2 bg-zinc-50 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg border border-zinc-100">
+                               <span className="text-[8px] sm:text-[10px] font-bold text-zinc-400 uppercase">Satuan:</span>
+                               <span className="text-[10px] sm:text-xs font-bold text-black">Rp{Number(item.price).toLocaleString()}</span>
                              </div>
                              {item.storeLocation && (
                                <div className="flex items-center gap-1.5 sm:gap-2 bg-zinc-50 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg border border-zinc-100">
-                                 <span className="text-[8px] sm:text-[10px] font-bold text-zinc-400 uppercase">Lokasi:</span>
-                                 <span className="text-[8px] sm:text-[10px] font-bold uppercase truncate max-w-[80px] sm:max-w-[120px]">{item.storeLocation}</span>
+                                 <span className="text-[8px] sm:text-[10px] font-bold text-zinc-400 uppercase">Store:</span>
+                                 <span className="text-[8px] sm:text-[10px] font-bold uppercase text-black truncate max-w-[100px] sm:max-w-[150px]">{item.storeLocation}</span>
                                </div>
                              )}
                              <div className="flex items-center gap-1.5 sm:gap-2 bg-zinc-50 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg border border-zinc-100">
-                               <span className="text-[8px] sm:text-[10px] font-bold text-zinc-400 uppercase">Status:</span>
-                               <span className={`text-[8px] sm:text-[10px] font-bold uppercase tracking-wider ${item.status.includes('Urgent') || item.status.includes('Mendesak') ? 'text-red-500' : 'text-zinc-600'}`}>
-                                 {item.status}
-                               </span>
+                               <span className="text-[8px] sm:text-[10px] font-bold text-zinc-400 uppercase">Pemohon:</span>
+                               <span className="text-[8px] sm:text-[10px] font-bold uppercase text-black truncate max-w-[80px] sm:max-w-[120px]">{item.requester}</span>
                              </div>
-                             {item.verificationStatus !== "PENDING" && item.verificationStatus && (
-                               <div className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg border ${item.verificationStatus === 'APPROVED' ? 'bg-green-50 border-green-100 text-green-700' : 'bg-red-50 border-red-100 text-red-700'}`}>
+                             <div className="flex items-center gap-1.5 sm:gap-2 bg-zinc-50 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg border border-zinc-100">
+                               <span className="text-[8px] sm:text-[10px] font-bold text-zinc-400 uppercase">Prioritas:</span>
+                               <span className={`text-[8px] sm:text-[10px] font-bold uppercase tracking-wider ${item.status.includes('Urgent') || item.status.includes('Mendesak') ? 'text-red-500' : 'text-zinc-600'}`}>
+                                {item.status}
+                              </span>
+                            </div>
+                            {(item.verificationStatus === 'TRANSFERRED' || item.verificationStatus === 'REALIZED') && (
+                               <div className="mt-4 pt-3 border-t border-zinc-50 space-y-2.5">
+                                 {/* Approval Stage Info */}
+                                 <div className="flex flex-wrap items-center gap-2">
+                                   <div className="flex items-center gap-1.5 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">
+                                     <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                     <span className="text-[9px] font-bold text-emerald-700 uppercase leading-none">Persetujuan: {item.verifierName}</span>
+                                   </div>
+                                   {item.verificationReason && (
+                                      <div className="flex items-center gap-1.5 bg-zinc-50 px-2 py-1 rounded-lg border border-zinc-100 italic">
+                                        <span className="text-[9px] font-medium text-zinc-500 truncate max-w-[180px]">"{item.verificationReason}"</span>
+                                      </div>
+                                   )}
+                                 </div>
+
+                                 {/* Transfer Stage Info */}
+                                 <div className="flex flex-wrap items-center gap-2">
+                                   <div className="flex items-center gap-1.5 bg-indigo-50 px-2 py-1 rounded-lg border border-indigo-100">
+                                     <RefreshCw className="w-3 h-3 text-indigo-400" />
+                                     <span className="text-[9px] font-bold text-indigo-700 uppercase leading-none">Transfer: {item.transferVerifier}</span>
+                                   </div>
+                                   {item.transferNote && (
+                                      <div className="flex items-center gap-1.5 bg-zinc-50 px-2 py-1 rounded-lg border border-zinc-100 italic">
+                                        <span className="text-[9px] font-medium text-zinc-500 truncate max-w-[180px]">"{item.transferNote}"</span>
+                                      </div>
+                                   )}
+                                   <div className="flex gap-1 ml-auto">
+                                      {item.transferEvidenceLink && (
+                                        <a href={item.transferEvidenceLink} target="_blank" rel="noreferrer" className="p-1 px-1.5 bg-indigo-50 text-indigo-600 rounded-md border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all">
+                                          <ExternalLink className="w-3 h-3" />
+                                        </a>
+                                      )}
+                                      {item.transferEvidencePhoto && (
+                                        <button onClick={() => setPreviewImageUrl(item.transferEvidencePhoto || "")} className="p-1 px-1.5 bg-indigo-50 text-indigo-600 rounded-md border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all">
+                                          <ImageIcon className="w-3 h-3" />
+                                        </button>
+                                      )}
+                                   </div>
+                                 </div>
+
+                                 {/* Realization Stage Info (if applicable) */}
+                                 {item.verificationStatus === 'REALIZED' && (
+                                   <div className="flex flex-wrap items-center gap-2">
+                                     <div className="flex items-center gap-1.5 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">
+                                       <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                       <span className="text-[9px] font-bold text-emerald-700 uppercase leading-none">Dibeli: {item.purchasedBy}</span>
+                                     </div>
+                                     <div className="flex items-center gap-1.5 bg-zinc-50 px-2 py-1 rounded-lg border border-zinc-100">
+                                        <span className="text-[9px] font-bold text-zinc-700 uppercase leading-none">Nilai: Rp{Number(item.realizationAmount).toLocaleString()}</span>
+                                     </div>
+                                     <div className="flex gap-1 ml-auto">
+                                        {item.invoiceLink && (
+                                          <a href={item.invoiceLink} target="_blank" rel="noreferrer" className="p-1 px-1.5 bg-emerald-50 text-emerald-600 rounded-md border border-emerald-100 hover:bg-emerald-600 hover:text-white transition-all">
+                                            <ExternalLink className="w-3 h-3" />
+                                          </a>
+                                        )}
+                                        {item.realizationPhoto && (
+                                          <button onClick={() => setPreviewImageUrl(item.realizationPhoto || "")} className="p-1 px-1.5 bg-emerald-50 text-emerald-600 rounded-md border border-emerald-100 hover:bg-emerald-600 hover:text-white transition-all">
+                                            <ImageIcon className="w-3 h-3" />
+                                          </button>
+                                        )}
+                                     </div>
+                                   </div>
+                                 )}
+                               </div>
+                            )}
+                            {item.verificationStatus !== "PENDING" && item.verificationStatus && item.verificationStatus !== 'TRANSFERRED' && item.verificationStatus !== 'REALIZED' && (
+                               <div className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg border ${item.verificationStatus === 'REJECTED' ? 'bg-red-50 border-red-100 text-red-700' : 'bg-green-50 border-green-100 text-green-700'}`}>
                                  <span className="text-[8px] sm:text-[10px] font-bold uppercase">Verif:</span>
                                  <span className="text-[8px] sm:text-[10px] font-bold uppercase truncate max-w-[60px] sm:max-w-[100px]">{item.verifierName}</span>
                                </div>
                              )}
                           </div>
-                          {item.verificationReason && (
+                          {item.verificationReason && item.verificationStatus !== 'TRANSFERRED' && item.verificationStatus !== 'REALIZED' && (
                             <p className="mt-3 text-[9px] sm:text-[10px] font-medium text-zinc-400 italic line-clamp-2">" {item.verificationReason} "</p>
+                          )}
+
+                          {authStatus.role === 'ADMIN' && item.verificationStatus === 'PENDING' && (
+                            <div className="mt-6 flex flex-row sm:flex-row gap-3 w-full sm:w-auto">
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleApprove(item);
+                                }}
+                                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 text-white rounded-2xl transition-all hover:bg-emerald-700 hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-emerald-600/20 group"
+                              >
+                                <CheckCircle2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                                <span className="text-xs font-black uppercase tracking-widest">Setujui</span>
+                              </button>
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleReject(item);
+                                }}
+                                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-white text-rose-600 border-2 border-rose-100 rounded-2xl transition-all hover:bg-rose-50 hover:border-rose-200 active:scale-[0.98] group"
+                              >
+                                <X className="w-4 h-4 group-hover:rotate-90 transition-transform" />
+                                <span className="text-xs font-black uppercase tracking-widest">Tolak</span>
+                              </button>
+                            </div>
+                          )}
+
+                          {authStatus.role === 'ADMIN' && item.verificationStatus === 'REJECTED' && (
+                             <div className="mt-6 flex flex-row sm:flex-row gap-3 w-full sm:w-auto">
+                               <button 
+                                 onClick={(e) => {
+                                   e.stopPropagation();
+                                   handleCancel(item);
+                                 }}
+                                 className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-white text-zinc-600 border-2 border-zinc-100 rounded-2xl transition-all hover:bg-zinc-50 hover:border-zinc-200 active:scale-[0.98] group"
+                               >
+                                 <RefreshCw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" />
+                                 <span className="text-xs font-black uppercase tracking-widest">Batalkan</span>
+                               </button>
+                             </div>
+                          )}
+
+                          {authStatus.role === 'ADMIN' && item.verificationStatus === 'APPROVED' && (
+                            <div className="mt-6 flex flex-row sm:flex-row gap-3 w-full sm:w-auto">
+                               <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleTransfer(item);
+                                }}
+                                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl transition-all hover:bg-indigo-700 hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-indigo-600/20 group"
+                              >
+                                <RefreshCw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-700" />
+                                <span className="text-xs font-black uppercase tracking-widest">Transfer</span>
+                              </button>
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCancel(item);
+                                }}
+                                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-white text-zinc-600 border-2 border-zinc-100 rounded-2xl transition-all hover:bg-zinc-50 hover:border-zinc-200 active:scale-[0.98] group"
+                              >
+                                <X className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                                <span className="text-xs font-black uppercase tracking-widest">Batalkan</span>
+                              </button>
+                            </div>
                           )}
                         </div>
  
-                        <div className="text-left md:text-right shrink-0 w-full md:w-auto border-t md:border-t-0 border-zinc-50 pt-3 md:pt-0">
-                           <p className="text-[8px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1 leading-none">Total Valuasi</p>
-                           <p className="text-xl sm:text-2xl font-display font-bold tracking-tight text-zinc-900 leading-none">Rp{Number(item.totalPrice).toLocaleString()}</p>
+                         <div className="text-left md:text-right shrink-0 w-full md:w-auto border-t md:border-t-0 border-zinc-50 pt-3 md:pt-0">
+                           {(item.verificationStatus === 'TRANSFERRED' || item.verificationStatus === 'REALIZED') && (
+                             <div className="mb-2">
+                               <p className="text-[8px] sm:text-[9px] font-bold text-zinc-300 uppercase tracking-widest leading-none mb-1">Pengajuan Awal</p>
+                               <p className="text-[10px] sm:text-xs font-bold text-zinc-400 leading-none line-through">Rp{Number(item.totalPrice).toLocaleString()}</p>
+                             </div>
+                           )}
+                           {item.verificationStatus === 'REALIZED' && item.transferAmount && (
+                             <div className="mb-2">
+                               <p className="text-[8px] sm:text-[9px] font-bold text-zinc-300 uppercase tracking-widest leading-none mb-1">Dana Ditransfer</p>
+                               <p className="text-[10px] sm:text-xs font-bold text-indigo-400 leading-none line-through">Rp{Number(item.transferAmount).toLocaleString()}</p>
+                             </div>
+                           )}
+                           <p className="text-[8px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1 leading-none">
+                             {item.verificationStatus === 'REALIZED' ? "Nilai Realisasi" : (item.verificationStatus === 'TRANSFERRED' ? "Dana Terkirim" : "Total Valuasi")}
+                           </p>
+                           <p className={`text-xl sm:text-2xl font-display font-bold tracking-tight leading-none ${item.verificationStatus === 'TRANSFERRED' ? 'text-indigo-600' : item.verificationStatus === 'REALIZED' ? 'text-emerald-600' : 'text-zinc-900'}`}>
+                             Rp{Number(item.verificationStatus === 'REALIZED' ? item.realizationAmount : (item.verificationStatus === 'TRANSFERRED' ? item.transferAmount : item.totalPrice)).toLocaleString()}
+                           </p>
+                           <p className={`mt-2 text-[8px] sm:text-[9px] font-black uppercase tracking-widest ${item.verificationStatus === 'REALIZED' ? 'text-emerald-600' : 'text-indigo-600'}`}>
+                             Status: {item.verificationStatus === 'REALIZED' ? 'Terealisasi' : 'Dana Terkirim'}
+                           </p>
+                           {item.verificationStatus === 'TRANSFERRED' && (
+                             <button 
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 setRealizeItem(item);
+                                 setRealizeForm({
+                                   amount: item.transferAmount?.toString() || item.totalPrice.toString(),
+                                   purchasedBy: "",
+                                   invoiceLink: "",
+                                 });
+                                 setRealizePhotoUrl("");
+                               }}
+                               className="mt-2 inline-flex items-center gap-1.5 bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700 transition-all font-display shadow-lg shadow-emerald-600/20 group"
+                             >
+                               <CheckCircle2 className="w-3 h-3 group-hover:scale-110 transition-transform" />
+                               <span className="text-[9px] font-black uppercase tracking-widest">Konfirmasi Realisasi</span>
+                             </button>
+                           )}
+                           {item.verificationStatus === 'REALIZED' && (
+                             <div className="mt-2 inline-block bg-emerald-600 text-white px-2 py-1 rounded-md">
+                               <span className="text-[9px] font-black uppercase tracking-widest">Terealisasi</span>
+                             </div>
+                           )}
                         </div>
                       </div>
 
-                      <div className="w-full lg:w-auto flex flex-row lg:flex-col items-center justify-center gap-1.5 border-t lg:border-t-0 lg:border-l border-zinc-50/50 pt-4 lg:pt-0 lg:pl-6 shrink-0">
-                        {item.refLink ? (
-                          <a 
-                            href={item.refLink} 
-                            target="_blank" 
-                            rel="noreferrer" 
-                            className="flex-1 lg:flex-none w-full lg:w-11 lg:h-11 py-3.5 lg:py-0 rounded-xl lg:rounded-2xl bg-zinc-50 flex items-center justify-center text-zinc-400 hover:bg-black hover:text-white transition-all shadow-sm group"
-                            title="Tautan Referensi"
-                          >
-                            <ExternalLink className="w-4 h-4 sm:w-5 sm:h-5" />
-                          </a>
-                        ) : (
-                          <div className="flex-1 lg:flex-none w-full lg:w-11 lg:h-11 py-3.5 lg:py-0 rounded-xl lg:rounded-2xl bg-zinc-50/30 flex items-center justify-center text-zinc-100 cursor-not-allowed">
-                            <ExternalLink className="w-4 h-4 sm:w-5 sm:h-5 opacity-20" />
-                          </div>
-                        )}
+                      <div className="w-full lg:w-auto flex flex-row lg:flex-col items-center justify-center gap-2 border-t lg:border-t-0 lg:border-l border-zinc-50/50 pt-4 lg:pt-0 lg:pl-6 shrink-0">
+                        {/* Action buttons removed link since it's now under photo */}
                         
                         {/* Role Based Access Control for Edit/Delete */}
                         {(authStatus.role === 'ADMIN' || (authStatus.role === 'USER' && (item.verificationStatus === 'PENDING' || !item.verificationStatus))) ? (
@@ -649,23 +982,25 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                                 setEditingItem(item);
                                 setIsFormOpen(true);
                               }}
-                              className="flex-1 lg:flex-none w-full lg:w-11 lg:h-11 py-3.5 lg:py-0 rounded-xl lg:rounded-2xl bg-zinc-50 flex items-center justify-center text-zinc-400 hover:bg-black hover:text-white transition-all shadow-sm"
+                              className="flex-1 lg:flex-none w-full lg:min-w-[44px] h-12 lg:h-11 rounded-xl lg:rounded-2xl bg-zinc-50 flex items-center justify-center text-zinc-400 hover:bg-black hover:text-white transition-all shadow-sm"
                               title="Ubah Data"
                             >
                               <Edit3 className="w-4 h-4 sm:w-5 sm:h-5" />
+                              <span className="lg:hidden ml-2 text-xs font-bold uppercase">Ubah</span>
                             </button>
                             <button 
                               onClick={() => setDeleteConfirmItem(item)}
-                              className="flex-1 lg:flex-none w-full lg:w-11 lg:h-11 py-3.5 lg:py-0 rounded-xl lg:rounded-2xl bg-red-50 flex items-center justify-center text-red-300 hover:bg-red-600 hover:text-white transition-all shadow-sm"
+                              className="flex-1 lg:flex-none w-full lg:min-w-[44px] h-12 lg:h-11 rounded-xl lg:rounded-2xl bg-red-50 flex items-center justify-center text-red-300 hover:bg-red-600 hover:text-white transition-all shadow-sm"
                               title="Hapus Data"
                             >
                               <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                              <span className="lg:hidden ml-2 text-xs font-bold uppercase">Hapus</span>
                             </button>
                           </>
                         ) : (
                           <div className="flex-[2] lg:flex-none w-full lg:w-11 lg:h-24 bg-zinc-50 rounded-xl lg:rounded-2xl border border-zinc-100 flex items-center justify-center px-2">
                              <div className="rotate-0 lg:-rotate-90 italic text-[8px] sm:text-[9px] font-black text-zinc-300 uppercase tracking-tighter whitespace-nowrap">
-                               Akses Terkunci
+                                Akses Terkunci
                              </div>
                           </div>
                         )}
@@ -750,6 +1085,7 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                         type="number" 
                         defaultValue={editingItem?.quantity} 
                         onChange={(e) => setFormFields(prev => ({ ...prev, quantity: Number(e.target.value) || 0 }))} 
+                        onWheel={(e) => (e.target as HTMLInputElement).blur()}
                         required 
                         className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all" 
                       />
@@ -767,17 +1103,8 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                       type="number" 
                       defaultValue={editingItem?.price} 
                       onChange={(e) => setFormFields(prev => ({ ...prev, price: Number(e.target.value) || 0 }))} 
+                      onWheel={(e) => (e.target as HTMLInputElement).blur()}
                       required 
-                      className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all" 
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Lokasi Store</label>
-                    <input 
-                      name="storeLocation" 
-                      defaultValue={editingItem?.storeLocation} 
-                      placeholder="Nama toko..."
                       className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all" 
                     />
                   </div>
@@ -793,8 +1120,40 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                   </div>
 
                   <div className="space-y-2">
+                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Lokasi Store</label>
+                    <select 
+                      name="storeLocation" 
+                      defaultValue={editingItem?.storeLocation || ""} 
+                      required 
+                      className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all appearance-none cursor-pointer"
+                    >
+                      <option value="" disabled>Pilih Lokasi Store...</option>
+                      {stores.map(store => (
+                        <option key={store} value={store}>{store}</option>
+                      ))}
+                      {!stores.length && <option disabled>Tidak ada lokasi di spreadsheet</option>}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
                     <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Pemohon</label>
                     <input name="requester" defaultValue={editingItem?.requester} required className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all" />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Kategori</label>
+                    <select 
+                      name="category" 
+                      defaultValue={editingItem?.category || ""} 
+                      required 
+                      className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all appearance-none cursor-pointer"
+                    >
+                      <option value="" disabled>Pilih Kategori...</option>
+                      {categories.map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                      {!categories.length && <option disabled>Tidak ada kategori di spreadsheet</option>}
+                    </select>
                   </div>
 
                   <div className="space-y-2">
@@ -920,12 +1279,17 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">Nama Verifikator</label>
-                  <input 
+                  <select 
                     name="verifier" 
                     required 
-                    placeholder="Nama lengkap..." 
-                    className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all" 
-                  />
+                    className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all appearance-none cursor-pointer"
+                  >
+                    <option value="" disabled>Pilih Nama Verifikator...</option>
+                    {verificators.map(v => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
+                    {!verificators.length && <option value={authStatus.user?.name}>{authStatus.user?.name || "Pilih Verifikator..."}</option>}
+                  </select>
                 </div>
                 
                 <div className="flex gap-3">
@@ -941,6 +1305,347 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                     className={`flex-1 text-white font-display font-bold py-5 rounded-[24px] text-lg shadow-xl transition-all ${verifyItem.status === 'APPROVED' ? 'bg-green-600 shadow-green-600/20' : 'bg-red-600 shadow-red-600/20'}`}
                   >
                     {verifyItem.status === 'APPROVED' ? "Setuju" : "Tolak"}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Transfer Popup Form */}
+      <AnimatePresence>
+        {transferItem && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+              onClick={() => setTransferItem(null)}
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative bg-white w-full max-w-xl rounded-[40px] p-6 sm:p-10 shadow-2xl my-auto"
+            >
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                   <h3 className="text-2xl font-display font-bold tracking-tight">Konfirmasi Transfer</h3>
+                   <p className="text-sm text-zinc-400 font-medium">Lengkapi rincian transfer dana untuk item ini.</p>
+                </div>
+                <button onClick={() => setTransferItem(null)} className="p-3 bg-zinc-50 rounded-full hover:bg-zinc-100 transition-all text-zinc-400">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleTransferSubmit} className="space-y-6 text-left">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">Nama Verifikator</label>
+                    <div className="relative">
+                      <select 
+                        required 
+                        value={transferForm.verifier}
+                        onChange={(e) => setTransferForm({...transferForm, verifier: e.target.value})}
+                        className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all appearance-none cursor-pointer"
+                      >
+                        <option value="" disabled>Pilih Verifikator...</option>
+                        {verificators.map(v => (
+                          <option key={v} value={v}>{v}</option>
+                        ))}
+                        {!verificators.length && authStatus.user?.name && <option value={authStatus.user.name}>{authStatus.user.name}</option>}
+                      </select>
+                      <ChevronRight className="absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-300 pointer-events-none rotate-90" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">Nominal Transfer (Rp)</label>
+                    <input 
+                      type="number"
+                      required
+                      value={transferForm.amount}
+                      onChange={(e) => setTransferForm({...transferForm, amount: e.target.value})}
+                      onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                      className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all" 
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">Keterangan Transfer (Opsional)</label>
+                  <textarea 
+                    value={transferForm.note}
+                    onChange={(e) => setTransferForm({...transferForm, note: e.target.value})}
+                    placeholder="Contoh: Transfer via Mandiri / Bukti terlampir..."
+                    className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[24px] font-medium text-sm outline-none focus:bg-white focus:border-black transition-all resize-none" 
+                    rows={2}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">Upload Link Bukti (Opsional)</label>
+                  <div className="relative">
+                    <Link className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-300" />
+                    <input 
+                      type="url"
+                      value={transferForm.evidenceLink}
+                      onChange={(e) => setTransferForm({...transferForm, evidenceLink: e.target.value})}
+                      placeholder="https://..."
+                      className="w-full bg-zinc-50 border border-zinc-100 pl-12 pr-5 py-4 rounded-[20px] font-medium text-sm outline-none focus:bg-white focus:border-black transition-all" 
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">Foto Bukti (Kamera/File)</label>
+                  <div className="flex items-center gap-4">
+                    <button 
+                      type="button"
+                      onClick={() => document.getElementById('transfer-photo-upload')?.click()}
+                      className="flex-1 flex items-center justify-center gap-3 py-4 bg-zinc-900 text-white rounded-[20px] font-black uppercase text-[10px] tracking-widest hover:bg-black transition-all shadow-lg shadow-black/10"
+                    >
+                      <Camera className="w-4 h-4" />
+                      <span>{transferLoading ? "Sedang Proses..." : "Ambil Foto / File"}</span>
+                    </button>
+                    <input 
+                      id="transfer-photo-upload"
+                      type="file" 
+                      accept="image/*" 
+                      capture="environment"
+                      className="hidden" 
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setTransferLoading(true);
+                        try {
+                          const options = { maxSizeMB: 0.8, maxWidthOrHeight: 1280, useWebWorker: true };
+                          const compressedFile = await imageCompression(file, options);
+                          const formData = new FormData();
+                          formData.append("file", compressedFile);
+                          const { data } = await axios.post("/api/upload", formData, {
+                            headers: { "Content-Type": "multipart/form-data" },
+                            withCredentials: true
+                          });
+                          setTransferPhotoUrl(normalizeDriveUrl(data.url));
+                        } catch (err) {
+                          alert("Upload bukti gagal.");
+                        } finally {
+                          setTransferLoading(false);
+                        }
+                      }}
+                    />
+                  </div>
+                  {transferPhotoUrl && (
+                    <div className="mt-4 p-4 bg-emerald-50 rounded-[24px] border border-emerald-100 flex flex-col gap-4 animate-in fade-in slide-in-from-top-2">
+                       <div className="w-full h-40 bg-zinc-900 rounded-xl overflow-hidden border border-emerald-100 relative group">
+                          <img src={transferPhotoUrl} className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                             <button type="button" onClick={() => setPreviewImageUrl(transferPhotoUrl)} className="p-2 bg-white rounded-full text-zinc-900 shadow-xl">
+                               <ExternalLink className="w-4 h-4" />
+                             </button>
+                          </div>
+                       </div>
+                       <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-emerald-200 rounded-xl overflow-hidden flex items-center justify-center">
+                               <ImageIcon className="w-5 h-5 text-emerald-600" />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-[10px] font-black text-emerald-800 uppercase tracking-widest">Bukti Terunggah</span>
+                              <span className="text-[9px] text-emerald-600 font-bold uppercase tracking-tight">Siap dikirim ke database</span>
+                            </div>
+                          </div>
+                          <button type="button" onClick={() => setTransferPhotoUrl("")} className="p-2 bg-white text-red-400 hover:text-red-600 rounded-full shadow-sm border border-emerald-100 transition-colors">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                       </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-4 pt-4">
+                  <button 
+                    type="button"
+                    onClick={() => setTransferItem(null)}
+                    className="flex-1 py-5 rounded-[24px] font-black uppercase text-[11px] tracking-widest text-zinc-400 border border-zinc-200 hover:bg-zinc-50 hover:text-black transition-all"
+                  >
+                    Batal
+                  </button>
+                  <button 
+                    type="submit"
+                    disabled={transferLoading}
+                    className="flex-[2] bg-indigo-600 text-white py-5 rounded-[24px] font-black uppercase text-[11px] tracking-widest flex items-center justify-center gap-3 hover:bg-indigo-700 hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-indigo-600/20 disabled:opacity-50 disabled:scale-100"
+                  >
+                    {transferLoading ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4" />
+                    )}
+                    <span>Kirim & Transfer Data</span>
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Realize Popup Form */}
+      <AnimatePresence>
+        {realizeItem && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+              onClick={() => setRealizeItem(null)}
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative bg-white w-full max-w-xl rounded-[40px] p-6 sm:p-10 shadow-2xl my-auto"
+            >
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                   <h3 className="text-2xl font-display font-bold tracking-tight">Konfirmasi Realisasi</h3>
+                   <p className="text-sm text-zinc-400 font-medium">Lengkapi rincian belanja aset untuk item ini.</p>
+                </div>
+                <button onClick={() => setRealizeItem(null)} className="p-3 bg-zinc-50 rounded-full hover:bg-zinc-100 transition-all text-zinc-400">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleRealizeSubmit} className="space-y-6 text-left">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">Nilai Realisasi (Rp)</label>
+                    <input 
+                      type="number"
+                      required
+                      value={realizeForm.amount}
+                      onChange={(e) => setRealizeForm({...realizeForm, amount: e.target.value})}
+                      onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                      placeholder="Masukkan nominal realisasi..."
+                      className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">Dibelanjakan Oleh</label>
+                    <input 
+                      type="text"
+                      required
+                      value={realizeForm.purchasedBy}
+                      onChange={(e) => setRealizeForm({...realizeForm, purchasedBy: e.target.value})}
+                      placeholder="Masukkan nama pembeli..."
+                      className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all" 
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">Upload Invoice (Link)</label>
+                  <div className="relative">
+                    <Link className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-300" />
+                    <input 
+                      type="url"
+                      value={realizeForm.invoiceLink}
+                      onChange={(e) => setRealizeForm({...realizeForm, invoiceLink: e.target.value})}
+                      placeholder="https://..."
+                      className="w-full bg-zinc-50 border border-zinc-100 pl-12 pr-5 py-4 rounded-[20px] font-medium text-sm outline-none focus:bg-white focus:border-black transition-all" 
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">Upload Bukti Foto (Kamera/File)</label>
+                  <div className="flex items-center gap-4">
+                    <button 
+                      type="button"
+                      onClick={() => document.getElementById('realize-photo-upload')?.click()}
+                      className="flex-1 flex items-center justify-center gap-3 py-4 bg-zinc-900 text-white rounded-[20px] font-black uppercase text-[10px] tracking-widest hover:bg-black transition-all shadow-lg shadow-black/10"
+                    >
+                      <Camera className="w-4 h-4" />
+                      <span>{realizeLoading ? "Sedang Proses..." : "Ambil Foto / File"}</span>
+                    </button>
+                    <input 
+                      id="realize-photo-upload"
+                      type="file" 
+                      accept="image/*" 
+                      capture="environment"
+                      className="hidden" 
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setRealizeLoading(true);
+                        try {
+                          const options = { maxSizeMB: 0.8, maxWidthOrHeight: 1280, useWebWorker: true };
+                          const compressedFile = await imageCompression(file, options);
+                          const formData = new FormData();
+                          formData.append("file", compressedFile);
+                          const { data } = await axios.post("/api/upload", formData, {
+                            headers: { "Content-Type": "multipart/form-data" },
+                            withCredentials: true
+                          });
+                          setRealizePhotoUrl(normalizeDriveUrl(data.url));
+                        } catch (err) {
+                          alert("Upload bukti gagal.");
+                        } finally {
+                          setRealizeLoading(false);
+                        }
+                      }}
+                    />
+                  </div>
+                  {realizePhotoUrl && (
+                    <div className="mt-4 p-4 bg-emerald-50 rounded-[24px] border border-emerald-100 flex flex-col gap-4 animate-in fade-in slide-in-from-top-2">
+                       <div className="w-full h-40 bg-zinc-900 rounded-xl overflow-hidden border border-emerald-100 relative group">
+                          <img src={realizePhotoUrl} className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                             <button type="button" onClick={() => setPreviewImageUrl(realizePhotoUrl)} className="p-2 bg-white rounded-full text-zinc-900 shadow-xl">
+                               <ExternalLink className="w-4 h-4" />
+                             </button>
+                          </div>
+                       </div>
+                       <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-emerald-200 rounded-xl overflow-hidden flex items-center justify-center">
+                               <ImageIcon className="w-5 h-5 text-emerald-600" />
+                            </div>
+                            <div className="flex flex-col">
+                               <span className="text-[10px] font-black text-emerald-800 uppercase tracking-widest">Bukti Terunggah</span>
+                               <span className="text-[9px] text-emerald-600 font-bold uppercase tracking-tight">Siap dikirim ke database</span>
+                            </div>
+                          </div>
+                          <button type="button" onClick={() => setRealizePhotoUrl("")} className="p-2 bg-white text-red-400 hover:text-red-600 rounded-full shadow-sm border border-emerald-100 transition-colors">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                       </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-4 pt-4">
+                  <button 
+                    type="button"
+                    onClick={() => setRealizeItem(null)}
+                    className="flex-1 py-5 rounded-[24px] font-black uppercase text-[11px] tracking-widest text-zinc-400 border border-zinc-200 hover:bg-zinc-50 hover:text-black transition-all"
+                  >
+                    Batal
+                  </button>
+                  <button 
+                    type="submit"
+                    disabled={realizeLoading}
+                    className="flex-[2] bg-emerald-600 text-white py-5 rounded-[24px] font-black uppercase text-[11px] tracking-widest flex items-center justify-center gap-3 hover:bg-emerald-700 hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-emerald-600/20 disabled:opacity-50 disabled:scale-100"
+                  >
+                    {realizeLoading ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4" />
+                    )}
+                    <span>Simpan & Selesaikan Realisasi</span>
                   </button>
                 </div>
               </form>

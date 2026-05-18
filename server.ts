@@ -141,7 +141,8 @@ async function getOrCreateMasterSpreadsheet(auth: any) {
     console.log(`Found existing spreadsheet: ${spreadsheetId}`);
     // Ensure Users sheet exists if we found an old one
     await ensureSheetExists(sheets, spreadsheetId, "Users", ["Email", "Name", "Role", "AddedAt"]);
-    await ensureSheetExists(sheets, spreadsheetId, "Procurement", ["ID", "Timestamp", "Nama Barang", "Kuantitas", "Satuan", "Harga Satuan", "Harga Total", "Lokasi Store", "Prioritas", "Pemohon", "Deskripsi", "Link Referensi", "Foto Referensi", "Persetujuan", "Deskripsi Persetujuan", "Verifikator"]);
+    await ensureSheetExists(sheets, spreadsheetId, "Procurement", ["ID", "Timestamp", "Nama Barang", "Kuantitas", "Satuan", "Harga Satuan", "Harga Total", "Lokasi Store", "Pemohon", "Kategori", "Prioritas", "Deskripsi", "Link Referensi", "Foto Referensi", "Persetujuan", "Deskripsi Persetujuan", "Verifikator", "Transfer Verifikator", "Transfer Nominal", "Transfer Keterangan", "Transfer Link Bukti", "Transfer Foto Bukti", "Realization Amount", "Purchased By", "Invoice Link", "Realization Photo"]);
+    await ensureSheetExists(sheets, spreadsheetId, "Category", ["Kategori"]);
   } else {
     console.log("Creating new master spreadsheet...");
     const createResp = await sheets.spreadsheets.create({
@@ -158,10 +159,20 @@ async function getOrCreateMasterSpreadsheet(auth: any) {
     // Initialize headers for Procurement
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: "Procurement!A1:P1",
+      range: "Procurement!A1:Z1",
       valueInputOption: "RAW",
       requestBody: {
-        values: [["ID", "Timestamp", "Nama Barang", "Kuantitas", "Satuan", "Harga Satuan", "Harga Total", "Lokasi Store", "Prioritas", "Pemohon", "Deskripsi", "Link Referensi", "Foto Referensi", "Persetujuan", "Deskripsi Persetujuan", "Verifikator"]]
+        values: [["ID", "Timestamp", "Nama Barang", "Kuantitas", "Satuan", "Harga Satuan", "Harga Total", "Lokasi Store", "Pemohon", "Kategori", "Prioritas", "Deskripsi", "Link Referensi", "Foto Referensi", "Persetujuan", "Deskripsi Persetujuan", "Verifikator", "Transfer Verifikator", "Transfer Nominal", "Transfer Keterangan", "Transfer Link Bukti", "Transfer Foto Bukti", "Realization Amount", "Purchased By", "Invoice Link", "Realization Photo"]]
+      }
+    });
+
+    // Initialize headers for Category
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: "Category!A1",
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [["Kategori"]]
       }
     });
 
@@ -616,12 +627,12 @@ app.get("/api/sheets/data", async (req, res) => {
     // 2. Read data
     const dataResp = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: "Procurement!A2:P1000",
+      range: "Procurement!A2:Z1000",
     });
 
     const rows = dataResp.data.values || [];
     const items = rows.map((row, index) => {
-      let vStatus = row[13] || "PENDING";
+      let vStatus = row[14] || "PENDING";
       // Legacy support for boolean-like strings
       if (vStatus === "TRUE") vStatus = "APPROVED";
       if (vStatus === "FALSE") vStatus = "PENDING";
@@ -636,14 +647,24 @@ app.get("/api/sheets/data", async (req, res) => {
         price: row[5] || 0,
         totalPrice: row[6] || 0,
         storeLocation: row[7] || "",
-        status: row[8] || "Penting (5x24 Jam)",
-        requester: row[9] || "",
-        description: row[10] || "",
-        refLink: row[11] || "",
-        refPhoto: row[12] || "",
+        requester: row[8] || "",
+        category: row[9] || "",
+        status: row[10] || "Penting (5x24 Jam)",
+        description: row[11] || "",
+        refLink: row[12] || "",
+        refPhoto: row[13] || "",
         verificationStatus: vStatus,
-        verificationReason: row[14] || "",
-        verifierName: row[15] || ""
+        verificationReason: row[15] || "",
+        verifierName: row[16] || "",
+        transferVerifier: row[17] || "",
+        transferAmount: row[18] || 0,
+        transferNote: row[19] || "",
+        transferEvidenceLink: row[20] || "",
+        transferEvidencePhoto: row[21] || "",
+        realizationAmount: row[22] || 0,
+        purchasedBy: row[23] || "",
+        invoiceLink: row[24] || "",
+        realizationPhoto: row[25] || ""
       };
     }).filter(item => item.id); // Filter out empty rows but keep original rowIndex
 
@@ -668,7 +689,7 @@ app.post("/api/sheets/add", async (req, res) => {
 
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: "Procurement!A:P",
+      range: "Procurement!A:V",
       valueInputOption: "RAW",
       requestBody: {
         values: [[
@@ -680,12 +701,18 @@ app.post("/api/sheets/add", async (req, res) => {
           item.price,
           item.totalPrice,
           item.storeLocation,
-          item.status,
           item.requester,
+          item.category || "",
+          item.status,
           item.description,
           item.refLink,
           item.refPhoto,
           "PENDING",
+          "",
+          "",
+          "",
+          "",
+          "",
           "",
           ""
         ]]
@@ -715,7 +742,7 @@ app.post("/api/sheets/update", async (req, res) => {
       if (role === 'USER') {
         const currentData = await sheets.spreadsheets.values.get({
           spreadsheetId,
-          range: `Procurement!N${rowIndex}:N${rowIndex}`,
+          range: `Procurement!O${rowIndex}:O${rowIndex}`,
         });
         const currentStatus = (currentData.data.values?.[0]?.[0] || "PENDING");
         if (currentStatus !== 'PENDING' && currentStatus !== '') {
@@ -725,7 +752,7 @@ app.post("/api/sheets/update", async (req, res) => {
   
       await sheets.spreadsheets.values.update({
         spreadsheetId,
-        range: `Procurement!A${rowIndex}:P${rowIndex}`,
+        range: `Procurement!A${rowIndex}:V${rowIndex}`,
         valueInputOption: "RAW",
         requestBody: {
           values: [[
@@ -737,14 +764,20 @@ app.post("/api/sheets/update", async (req, res) => {
             item.price,
             item.totalPrice,
             item.storeLocation,
-            item.status,
             item.requester,
+            item.category || "",
+            item.status,
             item.description,
             item.refLink,
             item.refPhoto,
             item.verificationStatus || "PENDING",
             item.verificationReason || "",
-            item.verifierName || ""
+            item.verifierName || "",
+            item.transferVerifier || "",
+            item.transferAmount || "",
+            item.transferNote || "",
+            item.transferEvidenceLink || "",
+            item.transferEvidencePhoto || ""
           ]]
         }
       });
@@ -768,7 +801,7 @@ app.post("/api/sheets/verify", async (req, res) => {
 
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: `Procurement!N${rowIndex}:P${rowIndex}`,
+      range: `Procurement!O${rowIndex}:Q${rowIndex}`,
       valueInputOption: "RAW",
       requestBody: {
         values: [[status, reason, verifier]]
@@ -779,6 +812,119 @@ app.post("/api/sheets/verify", async (req, res) => {
   } catch (error) {
     console.error("Sheets Verify error:", error);
     res.status(500).json({ error: "Failed to verify item" });
+  }
+});
+
+app.post("/api/sheets/transfer", async (req, res) => {
+  const tokensStr = req.cookies.google_tokens;
+  if (!tokensStr) return res.status(401).json({ error: "Unauthorized" });
+
+  const { spreadsheetId, rowIndex, transferData } = req.body;
+  try {
+    const tokens = JSON.parse(tokensStr);
+    const auth = getAuthorizedClient(tokens, req);
+    const sheets = google.sheets({ version: "v4", auth });
+
+    // Update status in O and transfer details in R:V
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `Procurement!O${rowIndex}`,
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [["TRANSFERRED"]]
+      }
+    });
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `Procurement!R${rowIndex}:V${rowIndex}`,
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [[
+          transferData.verifier,
+          transferData.amount,
+          transferData.note,
+          transferData.evidenceLink,
+          transferData.evidencePhoto
+        ]]
+      }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Sheets Transfer error:", error);
+    res.status(500).json({ error: "Failed to transfer item" });
+  }
+});
+
+app.post("/api/sheets/realize", async (req, res) => {
+  const tokensStr = req.cookies.google_tokens;
+  if (!tokensStr) return res.status(401).json({ error: "Unauthorized" });
+
+  const { spreadsheetId, rowIndex, realizationData } = req.body;
+  try {
+    const tokens = JSON.parse(tokensStr);
+    const auth = getAuthorizedClient(tokens, req);
+    const sheets = google.sheets({ version: "v4", auth });
+
+    // Update status in O and realization details in W:Z
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `Procurement!O${rowIndex}`,
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [["REALIZED"]]
+      }
+    });
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `Procurement!W${rowIndex}:Z${rowIndex}`,
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [[
+          realizationData.amount,
+          realizationData.purchasedBy,
+          realizationData.invoiceLink,
+          realizationData.photo
+        ]]
+      }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Sheets Realize error:", error);
+    res.status(500).json({ error: "Failed to realize item" });
+  }
+});
+
+app.get("/api/sheets/categories", async (req, res) => {
+  const tokensStr = req.cookies.google_tokens;
+  if (!tokensStr) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    const tokens = JSON.parse(tokensStr);
+    const auth = getAuthorizedClient(tokens, req);
+    const sheets = google.sheets({ version: "v4", auth });
+
+    const spreadsheetId = await getOrCreateMasterSpreadsheet(auth);
+    if (!spreadsheetId) throw new Error("Could not find or create master spreadsheet");
+
+    // Fetch Verificators (A2:A6), Categories (B2:B10) and Stores (C2:C10)
+    const categoryResp = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: "Category!A2:C10",
+    });
+
+    const rows = categoryResp.data.values || [];
+    const verificators = rows.slice(0, 5).map(row => row[0]).filter(Boolean);
+    const categories = rows.map(row => row[1]).filter(Boolean);
+    const stores = rows.map(row => row[2]).filter(Boolean);
+
+    res.json({ categories, stores, verificators });
+  } catch (error) {
+    console.error("Sheets Categories API error:", error);
+    res.status(500).json({ error: "Failed to fetch categories/stores" });
   }
 });
 
@@ -993,7 +1139,7 @@ app.post("/api/sheets/delete", async (req, res) => {
     if (role === 'USER') {
       const currentData = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: `Procurement!N${rowIndex}:N${rowIndex}`,
+        range: `Procurement!O${rowIndex}:O${rowIndex}`,
       });
       const currentStatus = (currentData.data.values?.[0]?.[0] || "PENDING");
       if (currentStatus !== 'PENDING' && currentStatus !== '') {
@@ -1055,12 +1201,13 @@ app.post("/api/sheets/delete", async (req, res) => {
     if (normalizedFoundId !== normalizedTargetId) {
       console.warn(`ID mismatch at row ${rowIndexToDelete}: Expected "${normalizedTargetId}", Found "${normalizedFoundId}". Searching for ID in all rows...`);
       // If it doesn't match, search for the ID in the entire column A
+      // Note: allIds might contain header at index 0
       const foundIndex = allIds.findIndex(row => row[0] && String(row[0]).trim() === normalizedTargetId);
       if (foundIndex === -1) {
-        console.error(`Item ID "${normalizedTargetId}" not found in sheet column A. Column A values:`, allIds.flat().slice(0, 50));
+        console.error(`Item ID "${normalizedTargetId}" not found in sheet column A of spreadsheet ${spreadsheetIdNum}.`);
         return res.status(404).json({ 
           error: "Item not found in database", 
-          detail: `ID "${normalizedTargetId}" could not be located in the spreadsheet.` 
+          detail: `ID "${normalizedTargetId}" could not be located in column A of the spreadsheet. Ensure you are deleting a valid synchronized item.` 
         });
       }
       rowIndexToDelete = foundIndex + 1; // Convert back to 1-based row index
