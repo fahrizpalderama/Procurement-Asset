@@ -411,7 +411,7 @@ async function getUserRole(auth: any): Promise<'ADMIN' | 'USER' | 'UNAUTHORIZED'
       const sheets = google.sheets({ version: "v4", auth });
       const usersResp = await sheets.spreadsheets.values.get({
         spreadsheetId: masterId,
-        range: "Users!A2:C100",
+        range: "Users!A2:D100",
       });
       const rows = usersResp.data.values || [];
       const userRow = rows.find(row => String(row[0]).toLowerCase().trim() === userEmail);
@@ -817,8 +817,8 @@ app.post("/api/admin/users/add", async (req, res) => {
     const oauth2 = google.oauth2({ version: "v2", auth });
     const userInfo = await oauth2.userinfo.get();
     
-    const role = await getUserRole(auth);
-    if (role !== 'ADMIN') {
+    const currentUserRole = await getUserRole(auth);
+    if (currentUserRole !== 'ADMIN') {
       return res.status(403).json({ error: "Forbidden" });
     }
 
