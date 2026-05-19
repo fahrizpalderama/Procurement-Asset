@@ -71,6 +71,7 @@ export default function Dashboard({ authStatus }: DashboardProps) {
   const [realizePhotoUrl, setRealizePhotoUrl] = useState("");
   const [realizeLoading, setRealizeLoading] = useState(false);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [cancelConfirmItem, setCancelConfirmItem] = useState<ProcurementItem | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
   const [stores, setStores] = useState<string[]>([]);
   const [verificators, setVerificators] = useState<string[]>([]);
@@ -405,26 +406,22 @@ export default function Dashboard({ authStatus }: DashboardProps) {
     }
   };
 
-  const handleCancel = async (item: ProcurementItem) => {
-    const isRejected = item.verificationStatus === 'REJECTED';
-    const confirmMsg = isRejected 
-      ? "Batalkan penolakan? Item akan kembali ke status PENDING (Inventaris)." 
-      : "Batalkan persetujuan? Item akan kembali ke status PENDING (Inventaris).";
-      
-    if (!confirm(confirmMsg)) return;
-
+  const executeCancel = async (item: ProcurementItem, reason: string, verifier: string) => {
+    const isApproved = item.verificationStatus === 'APPROVED';
+    
     try {
       setLoading(true);
       await axios.post("/api/sheets/verify", {
         spreadsheetId,
         rowIndex: item.rowIndex,
-        status: "PENDING",
-        reason: isRejected ? "Penolakan dibatalkan" : "Persetujuan dibatalkan",
-        verifier: ""
+        status: isApproved ? "REJECTED" : "PENDING",
+        reason: reason || (isApproved ? "Pembatalan Persetujuan (Pindah ke Ditolak)" : "Pembatalan Penolakan"),
+        verifier: verifier || ""
       }, { withCredentials: true });
       await fetchData();
+      setCancelConfirmItem(null);
     } catch (err) {
-      alert("Gagal membatalkan status.");
+      alert("Gagal memproses pembatalan.");
     } finally {
       setLoading(false);
     }
@@ -597,7 +594,7 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                 {activeTab === "inventaris" ? "Daftar Pengadaan Aktif" : 
                  activeTab === "disetujui" ? "Daftar Pengadaan Disetujui" : 
                  activeTab === "ditolak" ? "Daftar Pengadaan Ditolak" :
-                 activeTab === "transfer" ? "Menu Transfer Aset" : "Menu Realisasi Aset"}
+                 activeTab === "transfer" ? "Daftar Pengadaan Ditransfer" : "Daftar Pengadaan Direalisasi"}
               </h2>
               <div className="flex items-center gap-4">
                 <span className="text-2xl sm:text-3xl font-display font-bold tracking-tight">
@@ -606,11 +603,9 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                    activeTab === "ditolak" ? "Ditolak" :
                    activeTab === "transfer" ? "Transfer" : "Realisasi"}
                 </span>
-                {(activeTab === "inventaris" || activeTab === "disetujui" || activeTab === "ditolak") && (
-                  <span className="px-3 py-1 bg-black text-white rounded-full text-[11px] font-bold">
-                    {filteredItems.length}
-                  </span>
-                )}
+                <span className="px-3 py-1 bg-black text-white rounded-full text-[11px] font-bold">
+                  {filteredItems.length}
+                </span>
               </div>
             </div>
             
@@ -692,19 +687,24 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                       {/* Photo Thumbnail */}
                       <div className="flex flex-col gap-3 shrink-0 w-full sm:w-32">
                         <div 
-                          className="w-full h-32 bg-zinc-50 rounded-2xl overflow-hidden border border-zinc-100 cursor-zoom-in"
+                          className={`w-full h-32 bg-zinc-50 rounded-2xl overflow-hidden border border-zinc-100 relative group ${item.refPhoto ? 'cursor-zoom-in' : ''}`}
                           onClick={() => item.refPhoto && setPreviewImageUrl(item.refPhoto)}
                         >
                           {item.refPhoto ? (
-                            <img 
-                              src={item.refPhoto} 
-                              alt={item.name} 
-                              referrerPolicy="no-referrer"
-                              className="w-full h-full object-cover hover:scale-110 transition-transform duration-500"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = `https://placehold.co/400x400/f8fafc/94a3b8?text=Error+Loading`;
-                              }}
-                            />
+                            <>
+                              <img 
+                                src={item.refPhoto} 
+                                alt={item.name} 
+                                referrerPolicy="no-referrer"
+                                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = `https://placehold.co/400x400/f8fafc/94a3b8?text=Error+Loading`;
+                                }}
+                              />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <Search className="w-5 h-5 text-white" />
+                              </div>
+                            </>
                           ) : (
                             <div className="w-full h-full flex flex-col items-center justify-center text-zinc-200">
                               <ImageIcon className="w-8 h-8 mb-1" />
@@ -882,12 +882,13 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                             </div>
                           )}
 
-                          {authStatus.role === 'ADMIN' && item.verificationStatus === 'REJECTED' && (
+                          {/* Batalkan button removed for REJECTED status per user request */}
+                          {authStatus.role === 'ADMIN' && item.verificationStatus === 'REJECTED' && false && (
                              <div className="mt-6 flex flex-row sm:flex-row gap-3 w-full sm:w-auto">
                                <button 
                                  onClick={(e) => {
                                    e.stopPropagation();
-                                   handleCancel(item);
+                                   setCancelConfirmItem(item);
                                  }}
                                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-white text-zinc-600 border-2 border-zinc-100 rounded-2xl transition-all hover:bg-zinc-50 hover:border-zinc-200 active:scale-[0.98] group"
                                >
@@ -912,7 +913,7 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                               <button 
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleCancel(item);
+                                  setCancelConfirmItem(item);
                                 }}
                                 className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-white text-zinc-600 border-2 border-zinc-100 rounded-2xl transition-all hover:bg-zinc-50 hover:border-zinc-200 active:scale-[0.98] group"
                               >
@@ -937,14 +938,16 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                              </div>
                            )}
                            <p className="text-[8px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1 leading-none">
-                             {item.verificationStatus === 'REALIZED' ? "Nilai Realisasi" : (item.verificationStatus === 'TRANSFERRED' ? "Dana Terkirim" : "Total Valuasi")}
+                             {item.verificationStatus === 'REALIZED' ? "Nilai Realisasi" : (item.verificationStatus === 'TRANSFERRED' ? "Dana Terkirim" : "Total Pengajuan")}
                            </p>
                            <p className={`text-xl sm:text-2xl font-display font-bold tracking-tight leading-none ${item.verificationStatus === 'TRANSFERRED' ? 'text-indigo-600' : item.verificationStatus === 'REALIZED' ? 'text-emerald-600' : 'text-zinc-900'}`}>
                              Rp{Number(item.verificationStatus === 'REALIZED' ? item.realizationAmount : (item.verificationStatus === 'TRANSFERRED' ? item.transferAmount : item.totalPrice)).toLocaleString()}
                            </p>
-                           <p className={`mt-2 text-[8px] sm:text-[9px] font-black uppercase tracking-widest ${item.verificationStatus === 'REALIZED' ? 'text-emerald-600' : 'text-indigo-600'}`}>
-                             Status: {item.verificationStatus === 'REALIZED' ? 'Terealisasi' : 'Dana Terkirim'}
-                           </p>
+                           {(activeTab === 'transfer' || activeTab === 'realisasi') && (
+                             <p className={`mt-2 text-[8px] sm:text-[9px] font-black uppercase tracking-widest ${item.verificationStatus === 'REALIZED' ? 'text-emerald-600' : 'text-indigo-600'}`}>
+                               Status: {item.verificationStatus === 'REALIZED' ? 'Terealisasi' : 'Dana Terkirim'}
+                             </p>
+                           )}
                            {item.verificationStatus === 'TRANSFERRED' && (
                              <button 
                                onClick={(e) => {
@@ -1692,6 +1695,88 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                   Batalkan
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+
+        {cancelConfirmItem && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+              onClick={() => setCancelConfirmItem(null)}
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative bg-white w-full max-w-md rounded-[40px] p-10 shadow-2xl"
+            >
+              <div className="w-20 h-20 bg-zinc-50 text-zinc-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                <RefreshCw className="w-10 h-10" />
+              </div>
+              <h3 className="text-2xl font-display font-bold tracking-tight mb-2 text-center">Konfirmasi Pembatalan</h3>
+              <p className="text-sm text-zinc-400 font-medium mb-8 text-center">
+                {cancelConfirmItem.verificationStatus === 'REJECTED' 
+                  ? `Lengkapi alasan pembatalan penolakan untuk "${cancelConfirmItem.name}".`
+                  : `Lengkapi alasan pembatalan persetujuan untuk "${cancelConfirmItem.name}".`}
+              </p>
+
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const formData = new FormData(e.currentTarget);
+                  executeCancel(
+                    cancelConfirmItem, 
+                    formData.get("reason") as string, 
+                    formData.get("verifier") as string
+                  );
+                }} 
+                className="space-y-6"
+              >
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">Alasan Pembatalan</label>
+                  <textarea 
+                    name="reason" 
+                    required 
+                    placeholder="Contoh: Salah klik / Ada perubahan data..."
+                    className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[24px] font-medium text-sm outline-none focus:bg-white focus:border-black transition-all resize-none" 
+                    rows={3}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest ml-1">Nama Verifikator</label>
+                  <select 
+                    name="verifier" 
+                    required 
+                    className="w-full bg-zinc-50 border border-zinc-100 px-5 py-4 rounded-[20px] font-bold text-sm outline-none focus:bg-white focus:border-black transition-all appearance-none cursor-pointer"
+                  >
+                    <option value="" disabled>Pilih Nama Verifikator...</option>
+                    {verificators.map(v => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
+                    {!verificators.length && <option value={authStatus.user?.name}>{authStatus.user?.name || "Pilih Verifikator..."}</option>}
+                  </select>
+                </div>
+                
+                <div className="flex gap-3">
+                  <button 
+                    type="button" 
+                    onClick={() => setCancelConfirmItem(null)}
+                    className="flex-1 bg-zinc-50 text-zinc-400 font-bold py-5 rounded-[24px] text-sm hover:bg-zinc-100 transition-colors"
+                  >
+                    Batal
+                  </button>
+                  <button 
+                    type="submit"
+                    className="flex-1 bg-black text-white font-display font-bold py-5 rounded-[24px] text-lg shadow-xl shadow-black/20 hover:bg-zinc-800 transition-all"
+                  >
+                    Batalkan
+                  </button>
+                </div>
+              </form>
             </motion.div>
           </div>
         )}
