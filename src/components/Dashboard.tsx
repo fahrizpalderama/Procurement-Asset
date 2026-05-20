@@ -41,6 +41,9 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ authStatus }: DashboardProps) {
+  const isDev = authStatus.user?.email === 'asset.sebelas11@gmail.com';
+  const effectiveRole = isDev ? 'ADMIN' : authStatus.role;
+
   const [activeMainTab, setActiveMainTab] = useState<"dashboard" | "accounts">("dashboard");
   const [items, setItems] = useState<ProcurementItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -485,7 +488,7 @@ export default function Dashboard({ authStatus }: DashboardProps) {
     return matchesSearch && matchesTab;
   });
 
-  if (authStatus.role === 'UNAUTHORIZED') {
+  if (effectiveRole === 'UNAUTHORIZED') {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 text-center">
         <div className="max-w-md space-y-8 bg-white p-12 rounded-[40px] shadow-2xl shadow-black/5 border border-zinc-100">
@@ -543,7 +546,8 @@ export default function Dashboard({ authStatus }: DashboardProps) {
               <FileSpreadsheet className="w-3 sm:w-3.5 h-3 sm:h-3.5" />
               <span>Dashboard</span>
             </button>
-            {authStatus.role === 'ADMIN' && (
+            {/* Hide accounts menu for normal ADMIN, but show for developer */}
+            {isDev && (
               <button 
                 onClick={() => setActiveMainTab("accounts")}
                 className={`px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${activeMainTab === "accounts" ? "bg-white shadow-sm border border-zinc-100 text-black" : "text-zinc-400 hover:text-black"}`}
@@ -859,7 +863,7 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                             <p className="mt-3 text-[9px] sm:text-[10px] font-medium text-zinc-400 italic line-clamp-2">" {item.verificationReason} "</p>
                           )}
 
-                          {authStatus.role === 'ADMIN' && item.verificationStatus === 'PENDING' && (
+                          {effectiveRole === 'ADMIN' && item.verificationStatus === 'PENDING' && (
                             <div className="mt-6 flex flex-row sm:flex-row gap-3 w-full sm:w-auto">
                               <button 
                                 onClick={(e) => {
@@ -885,7 +889,7 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                           )}
 
                           {/* Batalkan button removed for REJECTED status per user request */}
-                          {authStatus.role === 'ADMIN' && item.verificationStatus === 'REJECTED' && false && (
+                          {effectiveRole === 'ADMIN' && item.verificationStatus === 'REJECTED' && false && (
                              <div className="mt-6 flex flex-row sm:flex-row gap-3 w-full sm:w-auto">
                                <button 
                                  onClick={(e) => {
@@ -900,7 +904,7 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                              </div>
                           )}
 
-                          {authStatus.role === 'ADMIN' && item.verificationStatus === 'APPROVED' && (
+                          {effectiveRole === 'ADMIN' && item.verificationStatus === 'APPROVED' && (
                             <div className="mt-6 flex flex-row sm:flex-row gap-3 w-full sm:w-auto">
                                <button 
                                 onClick={(e) => {
@@ -976,40 +980,31 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                         </div>
                       </div>
 
-                      <div className="w-full lg:w-auto flex flex-row lg:flex-col items-center justify-center gap-2 border-t lg:border-t-0 lg:border-l border-zinc-50/50 pt-4 lg:pt-0 lg:pl-6 shrink-0">
-                        {/* Action buttons removed link since it's now under photo */}
-                        
-                        {/* Role Based Access Control for Edit/Delete */}
-                        {(authStatus.role === 'ADMIN' || (authStatus.role === 'USER' && (item.verificationStatus === 'PENDING' || !item.verificationStatus))) ? (
-                          <>
-                            <button 
-                              onClick={() => {
-                                setEditingItem(item);
-                                setIsFormOpen(true);
-                              }}
-                              className="flex-1 lg:flex-none w-full lg:min-w-[44px] h-12 lg:h-11 rounded-xl lg:rounded-2xl bg-zinc-50 flex items-center justify-center text-zinc-400 hover:bg-black hover:text-white transition-all shadow-sm"
-                              title="Ubah Data"
-                            >
-                              <Edit3 className="w-4 h-4 sm:w-5 sm:h-5" />
-                              <span className="lg:hidden ml-2 text-xs font-bold uppercase">Ubah</span>
-                            </button>
-                            <button 
-                              onClick={() => setDeleteConfirmItem(item)}
-                              className="flex-1 lg:flex-none w-full lg:min-w-[44px] h-12 lg:h-11 rounded-xl lg:rounded-2xl bg-red-50 flex items-center justify-center text-red-300 hover:bg-red-600 hover:text-white transition-all shadow-sm"
-                              title="Hapus Data"
-                            >
-                              <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
-                              <span className="lg:hidden ml-2 text-xs font-bold uppercase">Hapus</span>
-                            </button>
-                          </>
-                        ) : (
-                          <div className="flex-[2] lg:flex-none w-full lg:w-11 lg:h-24 bg-zinc-50 rounded-xl lg:rounded-2xl border border-zinc-100 flex items-center justify-center px-2">
-                             <div className="rotate-0 lg:-rotate-90 italic text-[8px] sm:text-[9px] font-black text-zinc-300 uppercase tracking-tighter whitespace-nowrap">
-                                Akses Terkunci
-                             </div>
-                          </div>
-                        )}
-                      </div>
+                      {effectiveRole === 'ADMIN' && (
+                        <div className="w-full lg:w-auto flex flex-row lg:flex-col items-center justify-center gap-2 border-t lg:border-t-0 lg:border-l border-zinc-50/50 pt-4 lg:pt-0 lg:pl-6 shrink-0">
+                          {/* Action buttons removed link since it's now under photo */}
+                          
+                          <button 
+                            onClick={() => {
+                              setEditingItem(item);
+                              setIsFormOpen(true);
+                            }}
+                            className="flex-1 lg:flex-none w-full lg:min-w-[44px] h-12 lg:h-11 rounded-xl lg:rounded-2xl bg-zinc-50 flex items-center justify-center text-zinc-400 hover:bg-black hover:text-white transition-all shadow-sm"
+                            title="Ubah Data"
+                          >
+                            <Edit3 className="w-4 h-4 sm:w-5 sm:h-5" />
+                            <span className="lg:hidden ml-2 text-xs font-bold uppercase">Ubah</span>
+                          </button>
+                          <button 
+                            onClick={() => setDeleteConfirmItem(item)}
+                            className="flex-1 lg:flex-none w-full lg:min-w-[44px] h-12 lg:h-11 rounded-xl lg:rounded-2xl bg-red-50 flex items-center justify-center text-red-300 hover:bg-red-600 hover:text-white transition-all shadow-sm"
+                            title="Hapus Data"
+                          >
+                            <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                            <span className="lg:hidden ml-2 text-xs font-bold uppercase">Hapus</span>
+                          </button>
+                        </div>
+                      )}
                     </motion.div>
                   ))}
                 </AnimatePresence>
@@ -1225,7 +1220,7 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                     )}
                   </div>
                   <div className="flex flex-col sm:flex-row gap-4 pt-6">
-                    {editingItem && (authStatus.role === 'ADMIN' || (authStatus.role === 'USER' && (editingItem.verificationStatus === 'PENDING' || !editingItem.verificationStatus))) && (
+                    {editingItem && effectiveRole === 'ADMIN' && (
                       <button 
                         type="button" 
                         onClick={() => {
@@ -1237,7 +1232,7 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                       </button>
                     )}
 
-                    {(!editingItem || authStatus.role === 'ADMIN' || (authStatus.role === 'USER' && (editingItem.verificationStatus === 'PENDING' || !editingItem.verificationStatus))) ? (
+                    {(!editingItem || effectiveRole === 'ADMIN') ? (
                       <button type="submit" className="flex-[2] bg-black text-white font-display font-bold py-6 rounded-[24px] text-xl active:scale-95 transition-all shadow-xl shadow-black/20">
                         {editingItem ? "Ubah Data" : "Simpan Data"}
                       </button>
@@ -2070,8 +2065,8 @@ export default function Dashboard({ authStatus }: DashboardProps) {
         </div>
       </button>
 
-      {/* Role Navigation (Desktop & Mobile) ONLY for Admin */}
-      {authStatus.role === 'ADMIN' && (
+      {/* Role Navigation (Desktop & Mobile) ONLY for Admin - Hidden per user request except for developer */}
+      {isDev && (
         <div className="fixed bottom-10 left-10 flex gap-2 z-40">
            <button 
             onClick={() => setActiveMainTab(activeMainTab === "dashboard" ? "accounts" : "dashboard")}
