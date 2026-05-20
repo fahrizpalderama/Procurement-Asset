@@ -18,7 +18,8 @@ import {
   ExternalLink,
   Link,
   X,
-  ShieldCheck
+  ShieldCheck,
+  HelpCircle
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { ProcurementItem } from "../types";
@@ -72,6 +73,7 @@ export default function Dashboard({ authStatus }: DashboardProps) {
   const [realizeLoading, setRealizeLoading] = useState(false);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [cancelConfirmItem, setCancelConfirmItem] = useState<ProcurementItem | null>(null);
+  const [showCategoryGuide, setShowCategoryGuide] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
   const [stores, setStores] = useState<string[]>([]);
   const [verificators, setVerificators] = useState<string[]>([]);
@@ -1144,7 +1146,17 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Kategori</label>
+                    <div className="flex justify-between items-center ml-1">
+                      <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Kategori</label>
+                      <button
+                        type="button"
+                        onClick={() => setShowCategoryGuide(true)}
+                        className="flex items-center gap-1.5 text-xs text-zinc-550 hover:text-black transition-colors font-bold uppercase tracking-wider cursor-pointer bg-zinc-100 hover:bg-zinc-200/70 px-2.5 py-1 rounded-full text-[10px]"
+                      >
+                        <HelpCircle className="w-3.5 h-3.5" />
+                        <span>Petunjuk</span>
+                      </button>
+                    </div>
                     <select 
                       name="category" 
                       defaultValue={editingItem?.category || ""} 
@@ -1813,6 +1825,227 @@ export default function Dashboard({ authStatus }: DashboardProps) {
               >
                 <X className="w-8 h-8" />
               </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Category Selection Guide Modal */}
+      <AnimatePresence>
+        {showCategoryGuide && (
+          <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 sm:p-6 md:p-10">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+              onClick={() => setShowCategoryGuide(false)}
+            />
+            <motion.div 
+              initial={{ scale: 0.93, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.93, opacity: 0, y: 20 }}
+              transition={{ ease: "easeInOut", duration: 0.25 }}
+              className="relative bg-white w-full max-w-4xl rounded-[32px] overflow-hidden flex flex-col shadow-2xl border border-zinc-100 max-h-[85vh]"
+            >
+              {/* Header */}
+              <div className="flex justify-between items-center px-8 py-6 border-b border-zinc-100 bg-zinc-50/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-black text-white rounded-full flex items-center justify-center">
+                    <HelpCircle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-display font-black uppercase tracking-tight text-zinc-900">Petunjuk Pemilihan Kategori</h3>
+                    <p className="text-xs text-zinc-400 font-medium tracking-wide">Panduan resmi alokasi anggaran transaksi</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowCategoryGuide(false)}
+                  className="p-2 hover:bg-zinc-150 rounded-full text-zinc-400 hover:text-black transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-6 md:p-8 overflow-y-auto space-y-6 bg-zinc-50/20">
+                {/* Intro Card */}
+                <div className="bg-yellow-50/40 border border-yellow-250/30 p-4 rounded-2xl flex items-start gap-3">
+                  <span className="text-base">💡</span>
+                  <p className="text-xs text-yellow-800 font-medium leading-relaxed">
+                    Pastikan memilih kategori yang tepat agar laporan keuangan dan pencatatan transaksi terintegrasi secara akurat. Silakan scroll ke bawah untuk melihat daftar kategori selengkapnya.
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  {/* HPP */}
+                  <div className="bg-white rounded-2xl p-5 border border-zinc-100 shadow-sm flex flex-col md:flex-row md:items-start gap-4 hover:shadow-md transition-shadow">
+                    <div className="w-full md:w-36 flex-shrink-0">
+                      <div className="inline-block px-4 py-2 font-display font-black text-center text-xs uppercase tracking-wider rounded-xl w-full text-white bg-[#333333]">
+                        HPP
+                      </div>
+                    </div>
+                    <div className="flex-1 space-y-3">
+                      <p className="text-sm font-semibold text-zinc-700 leading-relaxed">
+                        Antara lain bahan baku utama produk dan sistem yang digunakan untuk menunjang penjualan.
+                      </p>
+                      <div className="p-3 bg-zinc-50 rounded-xl space-y-1">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Contoh:</span>
+                        <ul className="text-xs text-zinc-500 font-bold space-y-1">
+                          <li>• Sebelas - Susu, Kopi Robusta, Fiber Creme</li>
+                          <li>• Snapobox - Kertas, Photolab</li>
+                          <li>• Snap O Snap - Kertas, Background</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Utilities */}
+                  <div className="bg-white rounded-2xl p-5 border border-zinc-100 shadow-sm flex flex-col md:flex-row md:items-start gap-4 hover:shadow-md transition-shadow">
+                    <div className="w-full md:w-36 flex-shrink-0">
+                      <div className="inline-block px-4 py-2 font-display font-black text-center text-xs uppercase tracking-wider rounded-xl w-full text-white bg-[#990000]">
+                        Utilities
+                      </div>
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <p className="text-sm font-semibold text-zinc-700 leading-relaxed">
+                        Antara lain pembayaran wifi, listrik, maupun kuota.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Peralatan */}
+                  <div className="bg-white rounded-2xl p-5 border border-zinc-100 shadow-sm flex flex-col md:flex-row md:items-start gap-4 hover:shadow-md transition-shadow">
+                    <div className="w-full md:w-36 flex-shrink-0">
+                      <div className="inline-block px-4 py-2 font-display font-black text-center text-xs uppercase tracking-wider rounded-xl w-full text-white bg-[#663300]">
+                        Peralatan
+                      </div>
+                    </div>
+                    <div className="flex-1 space-y-3">
+                      <p className="text-sm font-semibold text-zinc-700 leading-relaxed">
+                        Alat tidak habis pakai yang digunakan untuk menjalankan proses produksi.
+                      </p>
+                      <div className="p-3 bg-zinc-50 rounded-xl space-y-1">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Contoh:</span>
+                        <ul className="text-xs text-zinc-500 font-bold space-y-1">
+                          <li>• Sebelas - Grinder & Showcase</li>
+                          <li>• Snapobox - Monitor & Mini PC</li>
+                          <li>• Balcos Compound - Kursi & Meja Stool</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Perlengkapan */}
+                  <div className="bg-white rounded-2xl p-5 border border-zinc-100 shadow-sm flex flex-col md:flex-row md:items-start gap-4 hover:shadow-md transition-shadow">
+                    <div className="w-full md:w-36 flex-shrink-0">
+                      <div className="inline-block px-4 py-2 font-display font-black text-center text-xs uppercase tracking-wider rounded-xl w-full text-white bg-[#5c3a8c]">
+                        Perlengkapan
+                      </div>
+                    </div>
+                    <div className="flex-1 space-y-3">
+                      <p className="text-sm font-semibold text-zinc-700 leading-relaxed">
+                        Alat habis pakai yang digunakan untuk menjalankan proses produksi.
+                      </p>
+                      <div className="p-3 bg-zinc-50 rounded-xl space-y-1">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Contoh:</span>
+                        <ul className="text-xs text-zinc-500 font-bold space-y-1">
+                          <li>• Snap O Snap - Tissue & Pengharum Ruangan</li>
+                          <li>• Sebelas - Trash Bag & Sabun Cuci Piring</li>
+                          <li>• Zona Massage - Panties & Nurse Cap</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Maintenance */}
+                  <div className="bg-white rounded-2xl p-5 border border-zinc-100 shadow-sm flex flex-col md:flex-row md:items-start gap-4 hover:shadow-md transition-shadow">
+                    <div className="w-full md:w-36 flex-shrink-0">
+                      <div className="inline-block px-4 py-2 font-display font-black text-center text-xs uppercase tracking-wider rounded-xl w-full text-white bg-[#0d6b42]">
+                        Maintenance
+                      </div>
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <p className="text-sm font-semibold text-zinc-700 leading-relaxed">
+                        Seluruh perbaikan alat maupun ruang.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Lain-Lain */}
+                  <div className="bg-white rounded-2xl p-5 border border-zinc-100 shadow-sm flex flex-col md:flex-row md:items-start gap-4 hover:shadow-md transition-shadow">
+                    <div className="w-full md:w-36 flex-shrink-0">
+                      <div className="inline-block px-4 py-2 font-display font-black text-center text-xs uppercase tracking-wider rounded-xl w-full text-white bg-[#0550ac]">
+                        Lain-Lain
+                      </div>
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <p className="text-sm font-semibold text-zinc-700 leading-relaxed">
+                        Seluruh biaya tambahan di luar kategori sebelumnya seperti ongkos kirim, admin, bensin, biaya cetak.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Tenaga Kerja */}
+                  <div className="bg-white rounded-2xl p-5 border border-zinc-100 shadow-sm flex flex-col md:flex-row md:items-start gap-4 hover:shadow-md transition-shadow">
+                    <div className="w-full md:w-36 flex-shrink-0">
+                      <div className="inline-block px-4 py-2 font-display font-black text-center text-xs uppercase tracking-wider rounded-xl w-full text-white bg-[#1f4f5a]">
+                        Tenaga Kerja
+                      </div>
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <p className="text-sm font-semibold text-zinc-700 leading-relaxed">
+                        Seluruh biaya yang dikeluarkan untuk membayar pekerja, seperti gaji pokok, tunjangan, dan lembur (jika ada).
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Marketing */}
+                  <div className="bg-white rounded-2xl p-5 border border-zinc-100 shadow-sm flex flex-col md:flex-row md:items-start gap-4 hover:shadow-md transition-shadow">
+                    <div className="w-full md:w-36 flex-shrink-0">
+                      <div className="inline-block px-4 py-2 font-display font-black text-center text-xs uppercase tracking-wider rounded-xl w-full text-[#333300] bg-[#bec915]">
+                        Marketing
+                      </div>
+                    </div>
+                    <div className="flex-1 space-y-3">
+                      <p className="text-sm font-semibold text-zinc-700 leading-relaxed">
+                        Seluruh biaya untuk mempromosikan, menjual, dan mendistribusikan produk atau jasa.
+                      </p>
+                      <div className="p-3 bg-zinc-50 rounded-xl space-y-1">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-[#a1a1aa] stroke-zinc-400">Contoh:</span>
+                        <p className="text-xs text-zinc-500 font-bold">
+                          ads instagram, KOL, cetak flyer.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sewa Tempat */}
+                  <div className="bg-white rounded-2xl p-5 border border-zinc-100 shadow-sm flex flex-col md:flex-row md:items-start gap-4 hover:shadow-md transition-shadow">
+                    <div className="w-full md:w-36 flex-shrink-0">
+                      <div className="inline-block px-4 py-2 font-display font-black text-center text-xs uppercase tracking-wider rounded-xl w-full text-white bg-[#b03a9f]">
+                        Sewa Tempat
+                      </div>
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <p className="text-sm font-semibold text-zinc-700 leading-relaxed">
+                        Seluruh biaya yang digunakan untuk menyewa tempat.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="px-8 py-5 border-t border-zinc-100 bg-zinc-50/50 flex justify-end">
+                <button 
+                  type="button"
+                  onClick={() => setShowCategoryGuide(false)}
+                  className="bg-black text-white hover:bg-zinc-800 font-display font-bold py-3.5 px-8 rounded-2xl text-sm transition-colors cursor-pointer"
+                >
+                  Selesai Membaca
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
