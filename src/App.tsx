@@ -2,9 +2,12 @@ import React, { useState, useEffect } from "react";
 import Dashboard from "./components/Dashboard";
 import Login from "./components/Login";
 import axios from "axios";
+import { Moon, Sparkles } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 
 export default function App() {
   const [authStatus, setAuthStatus] = useState<{ isAuthenticated: boolean } | null>(null);
+  const [isAsleep, setIsAsleep] = useState(false);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -18,28 +21,24 @@ export default function App() {
     checkAuth();
   }, []);
 
-  // --- AUTO LOGOUT LOGIC (10 MINUTES) ---
+  // --- INACTIVITY / SLEEP DETECTOR LOGIC (10 MINUTES) ---
   useEffect(() => {
     if (!authStatus?.isAuthenticated) return;
+    if (isAsleep) return; // Stop tracking during sleep so simple cursor movements don't close the modal
 
     let timeoutId: NodeJS.Timeout;
     const INACTIVITY_LIMIT = 10 * 60 * 1000; // 10 minutes
 
-    const handleLogout = async () => {
-      try {
-        await axios.post("/api/auth/logout", {}, { withCredentials: true });
-        window.location.reload(); // Hard reload to clear state and redirect to login
-      } catch (err) {
-        console.error("Auto-logout failed:", err);
-      }
+    const handleSleep = () => {
+      setIsAsleep(true);
     };
 
     const resetTimer = () => {
       if (timeoutId) clearTimeout(timeoutId);
-      timeoutId = setTimeout(handleLogout, INACTIVITY_LIMIT);
+      timeoutId = setTimeout(handleSleep, INACTIVITY_LIMIT);
     };
 
-    // Events to track user activity
+    // Events to track user activity when awake
     const events = ["mousedown", "mousemove", "keypress", "scroll", "touchstart"];
     
     // Set initial timer
@@ -56,7 +55,7 @@ export default function App() {
         document.removeEventListener(event, resetTimer);
       });
     };
-  }, [authStatus?.isAuthenticated]);
+  }, [authStatus?.isAuthenticated, isAsleep]);
 
   if (authStatus === null) {
     return (
@@ -79,6 +78,59 @@ export default function App() {
     );
   }
 
-  return authStatus.isAuthenticated ? <Dashboard authStatus={authStatus} /> : <Login />;
+  return (
+    <>
+      {authStatus.isAuthenticated ? <Dashboard authStatus={authStatus} /> : <Login />}
+
+      <AnimatePresence>
+        {isAsleep && (
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center p-6 bg-black/85 backdrop-blur-xl">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 25 }}
+              className="bg-white w-full max-w-sm rounded-[40px] p-10 text-center shadow-2xl relative border border-zinc-100/10 overflow-hidden"
+            >
+              <div className="absolute inset-0 bg-linear-to-b from-indigo-50/20 to-transparent pointer-events-none" />
+              
+              <div className="relative mb-8">
+                {/* Sleeping Moon Container */}
+                <div className="w-24 h-24 bg-zinc-50 text-indigo-500 rounded-full flex items-center justify-center mx-auto relative animate-pulse">
+                  <Moon className="w-12 h-12 stroke-[1.5]" />
+                  <motion.div
+                    animate={{ 
+                      scale: [1, 1.2, 1],
+                      opacity: [0.3, 1, 0.3]
+                    }}
+                    transition={{ 
+                      repeat: Infinity, 
+                      duration: 3,
+                      ease: "easeInOut"
+                    }}
+                    className="absolute top-2 right-2 text-indigo-400"
+                  >
+                    <Sparkles className="w-5 h-5" />
+                  </motion.div>
+                </div>
+              </div>
+
+              <h3 className="text-3xl font-display font-black tracking-tight mb-3 text-zinc-900 leading-none">Aplikasi Tidur</h3>
+              <p className="text-xs text-zinc-400 font-bold leading-relaxed mb-8 max-w-[240px] mx-auto">
+                Aplikasi ini dijeda sementara karena tidak ada aktivitas untuk mencegah refresh otomatis.
+              </p>
+
+              <button 
+                onClick={() => setIsAsleep(false)}
+                className="w-full bg-black text-white font-display font-black py-5 rounded-[24px] text-sm hover:bg-zinc-800 transition-all shadow-xl shadow-black/20 uppercase tracking-widest cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+              >
+                Kembali ke Halaman
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </>
+  );
 }
 
