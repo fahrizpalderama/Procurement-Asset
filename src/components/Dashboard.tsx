@@ -1426,6 +1426,7 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                           const options = { maxSizeMB: 0.8, maxWidthOrHeight: 1280, useWebWorker: true };
                           const compressedFile = await imageCompression(file, options);
                           const formData = new FormData();
+                          formData.append("folderId", "1VpOL3N0y-CNRy48xbQ5QHGB5l-c-7sqk");
                           formData.append("file", compressedFile);
                           const { data } = await axios.post("/api/upload", formData, {
                             headers: { "Content-Type": "multipart/form-data" },
@@ -1588,6 +1589,7 @@ export default function Dashboard({ authStatus }: DashboardProps) {
                           const options = { maxSizeMB: 0.8, maxWidthOrHeight: 1280, useWebWorker: true };
                           const compressedFile = await imageCompression(file, options);
                           const formData = new FormData();
+                          formData.append("folderId", "11mTS3X6Rbr2f2m236XhwYWc4gW-_WGwO");
                           formData.append("file", compressedFile);
                           const { data } = await axios.post("/api/upload", formData, {
                             headers: { "Content-Type": "multipart/form-data" },

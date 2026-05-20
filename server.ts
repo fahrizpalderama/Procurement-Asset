@@ -505,9 +505,9 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
     logAuthInit(req);
 
     // 1. Find or use fixed photos folder
-    let folderId = PHOTOS_FOLDER_ID;
+    let folderId = req.body.folderId || PHOTOS_FOLDER_ID;
     
-    // Fallback if PHOTOS_FOLDER_ID is just a name or placeholder
+    // Fallback if PHOTOS_FOLDER_ID is just a name or placeholder and no folderId passed in body
     if (!folderId || folderId === "Procurement_Photos") {
       const folderResp = await drive.files.list({
         q: `name = '${PHOTOS_FOLDER_NAME}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
